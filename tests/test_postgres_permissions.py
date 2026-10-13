@@ -5,6 +5,7 @@ PostgreSQL only on 127.0.0.1, and does not mount a named volume. It never
 reads GATEWAY_DATABASE_URL or the Compose gateway_db volume.
 """
 
+import json
 import os
 import socket
 import subprocess
@@ -56,19 +57,101 @@ def _free_port() -> int:
 def _docker(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(args, check=check, capture_output=True, text=True)
-    except subprocess.CalledProcessError:
-        raise RuntimeError("A disposable PostgreSQL command failed.") from None
+    except subprocess.CalledProcessError as exc:
+        detail = _safe_docker_detail(exc.stderr)
+        message = "A disposable PostgreSQL command failed."
+        if detail:
+            message = f"{message} {detail}"
+        raise RuntimeError(message) from None
+
+
+def _safe_docker_detail(stderr: str | None) -> str:
+    if not stderr:
+        return ""
+    kept: list[str] = []
+    for line in stderr.splitlines():
+        lowered = line.lower()
+        if "password" in lowered or "postgresql://" in lowered or "postgres://" in lowered:
+            continue
+        stripped = line.strip()
+        if stripped:
+            kept.append(stripped)
+    return " ".join(kept)[:240]
+
+
+def _binding_pairs(payload: str) -> list[tuple[str, str]] | None:
+    text = payload.strip()
+    if text in {"", "null"}:
+        return []
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    pairs: list[tuple[str, str]] = []
+    for bindings in parsed.values():
+        if not bindings:
+            continue
+        for binding in bindings:
+            if not isinstance(binding, dict):
+                return None
+            pairs.append((str(binding.get("HostIp") or ""), str(binding.get("HostPort") or "")))
+    return pairs
+
+
+def _concrete_bindings(payload: str) -> list[tuple[str, str]] | None:
+    pairs = _binding_pairs(payload)
+    if pairs is None:
+        return None
+    return [(host_ip, host_port) for host_ip, host_port in pairs if host_port]
+
+
+def _is_loopback(host_ip: str) -> bool:
+    return host_ip in {"127.0.0.1", "::1"}
 
 
 def _assert_isolated(container: str) -> None:
+    """Reject Compose volumes and any publish that is not loopback-only.
+
+    Docker Engine 28 can report an IPv6 routed placeholder with an empty host
+    port, or leave NetworkSettings.Ports empty for a moment while
+    HostConfig.PortBindings already says 127.0.0.1. An empty host port is not
+    a listen socket. A concrete wildcard address still fails this check.
+    """
     mounts = _docker(["docker", "inspect", "-f", "{{range .Mounts}}{{.Name}} {{.Destination}}\n{{end}}", container])
     if "gateway_db" in mounts.stdout:
         raise RuntimeError("The disposable database mounted the Compose volume.")
-    ports = _docker(["docker", "inspect", "-f", "{{json .NetworkSettings.Ports}}", container])
-    if "0.0.0.0" in ports.stdout or "[::]" in ports.stdout:
-        raise RuntimeError("The disposable database is not bound to 127.0.0.1 only.")
-    if "127.0.0.1" not in ports.stdout:
-        raise RuntimeError("The disposable database did not publish a localhost port.")
+    deadline = time.monotonic() + 3
+    while True:
+        ports = _docker(["docker", "inspect", "-f", "{{json .NetworkSettings.Ports}}", container])
+        requested = _docker(["docker", "inspect", "-f", "{{json .HostConfig.PortBindings}}", container])
+        actual = _concrete_bindings(ports.stdout)
+        requested_bindings = _concrete_bindings(requested.stdout)
+        if actual is None or requested_bindings is None:
+            if time.monotonic() >= deadline:
+                raise RuntimeError("The disposable database did not publish a localhost port.")
+            time.sleep(0.2)
+            continue
+        if actual and all(_is_loopback(host_ip) for host_ip, _port in actual):
+            if any(host_ip == "127.0.0.1" for host_ip, _port in actual):
+                return
+        wildcard = any(
+            not _is_loopback(host_ip)
+            for host_ip, _port in [*(actual or []), *(requested_bindings or [])]
+        )
+        if wildcard:
+            raise RuntimeError("The disposable database is not bound to 127.0.0.1 only.")
+        if time.monotonic() >= deadline:
+            if (
+                not actual
+                and requested_bindings
+                and all(_is_loopback(host_ip) for host_ip, _port in requested_bindings)
+                and any(host_ip == "127.0.0.1" for host_ip, _port in requested_bindings)
+            ):
+                return
+            raise RuntimeError("The disposable database did not publish a localhost port.")
+        time.sleep(0.2)
 
 
 def _wait_ready(container: str) -> None:
