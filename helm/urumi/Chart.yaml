@@ -1,0 +1,7 @@
+apiVersion: v2
+name: urumi
+description: Gateway, three upstream MCP servers, dashboard, gateway PostgreSQL, and the WooCommerce store.
+type: application
+version: 0.3.0
+appVersion: "0.3.0"
+kubeVersion: ">=1.27.0-0"

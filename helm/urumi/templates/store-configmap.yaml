@@ -1,0 +1,18 @@
+{{- if .Values.store.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "urumi.serviceName" (list . "store-config") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "store-config") | nindent 4 }}
+data:
+  WORDPRESS_DB_HOST: {{ include "urumi.serviceName" (list . "store-db") | quote }}
+  WORDPRESS_DB_NAME: {{ .Values.store.databaseName | quote }}
+  WORDPRESS_DB_USER: {{ .Values.store.databaseUser | quote }}
+  WORDPRESS_URL: {{ include "urumi.publicStoreUrl" . | quote }}
+  WORDPRESS_TITLE: {{ .Values.store.title | quote }}
+  WORDPRESS_CONFIG_WAIT_ATTEMPTS: {{ .Values.store.init.configWaitAttempts | quote }}
+  WOOCOMMERCE_DEMO_PAYMENT: {{ .Values.store.demoPayment | quote }}
+  init-store.sh: |
+{{ .Files.Get "scripts/init-store.sh" | indent 4 }}
+{{- end }}

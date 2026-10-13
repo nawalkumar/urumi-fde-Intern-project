@@ -1,0 +1,49 @@
+Urumi chart {{ .Chart.Version }} rendered release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+The gateway, upstream MCP Services, PostgreSQL, MariaDB, WordPress, and dashboard are ClusterIP.
+No API key is created on startup. Upstream MCP Services have no Ingress and no NodePort.
+WordPress and MariaDB use new PersistentVolumeClaims. They do not mount Compose volumes.
+
+In-cluster addresses:
+  Gateway:    {{ include "urumi.serviceName" (list . "gateway") }}:{{ .Values.service.mcpPort }}
+  Support:    http://{{ include "urumi.serviceName" (list . .Values.upstreams.support.component) }}:{{ .Values.service.mcpPort }}/mcp
+  Utility:    http://{{ include "urumi.serviceName" (list . .Values.upstreams.utility.component) }}:{{ .Values.service.mcpPort }}/mcp
+  WooCommerce: http://{{ include "urumi.serviceName" (list . .Values.upstreams.woocommerce.component) }}:{{ .Values.service.mcpPort }}/mcp
+  PostgreSQL: {{ include "urumi.databaseHost" . }}:{{ .Values.database.port }}
+  {{- if .Values.dashboard.enabled }}
+  Dashboard:  {{ include "urumi.serviceName" (list . "dashboard") }}:{{ .Values.dashboard.port }}
+  {{- end }}
+
+The gateway Secret {{ include "urumi.databaseSecretName" . }} must contain:
+  {{ .Values.database.secretKeys.password }}
+  {{ .Values.database.secretKeys.conninfo }}
+
+GATEWAY_DATABASE_URL is passed to psycopg as a connection string. Prefer the libpq keyword form so password characters such as @ : / # ? are not parsed as URI syntax. See the chart README.
+
+{{- if .Values.store.enabled }}
+Store:
+  WordPress: {{ include "urumi.serviceName" (list . "wordpress") }}:{{ .Values.store.wordpress.port }}
+  MariaDB:   {{ include "urumi.serviceName" (list . "store-db") }}:{{ .Values.store.mariadb.port }}
+  Public URL: {{ include "urumi.publicStoreUrl" . }}
+  Store Secret {{ include "urumi.storeSecretName" . }} must contain:
+    {{ .Values.store.secretKeys.mariadbRootPassword }}
+    {{ .Values.store.secretKeys.mariadbPassword }}
+    {{ .Values.store.secretKeys.wordpressDbPassword }}
+    {{ .Values.store.secretKeys.adminUser }}
+    {{ .Values.store.secretKeys.adminPassword }}
+    {{ .Values.store.secretKeys.adminEmail }}
+  WORDPRESS_DB_PASSWORD must be the MariaDB user password. Create REST API keys in wp-admin after install. This chart does not print them.
+  {{- if eq .Values.store.demoPayment "cod" }}
+  The init Job enables WooCommerce Cash on delivery. It does not create products or orders.
+  {{- end }}
+{{- end }}
+
+WooCommerce product and order tools stay unregistered until WOOCOMMERCE_BASE_URL, WOOCOMMERCE_CONSUMER_KEY, and WOOCOMMERCE_CONSUMER_SECRET are all set. When the store is enabled and woocommerce.baseUrl is empty, the in-cluster WordPress Service is used. woocommerce.siteUrl defaults to store.publicUrl. Consumer keys still come from woocommerce.existingSecret.
+
+{{- if .Values.ingress.enabled }}
+Ingress {{ include "urumi.serviceName" (list . "ingress") }} is rendered. This chart does not install an ingress controller.
+{{- else }}
+Ingress is disabled. Set ingress.enabled after an ingress controller is installed and the hostnames are real.
+{{- end }}
+
+Bundled PostgreSQL keeps its volume when the StatefulSet is deleted only while database.persistence.retain is true. Deleting the PVC can still delete the data if the volume's reclaim policy is Delete.

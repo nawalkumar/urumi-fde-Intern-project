@@ -1,0 +1,173 @@
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: ${WORDPRESS_DB_NAME:?Set WORDPRESS_DB_NAME in .env}
+      MARIADB_USER: ${WORDPRESS_DB_USER:?Set WORDPRESS_DB_USER in .env}
+      MARIADB_PASSWORD: ${WORDPRESS_DB_PASSWORD:?Set WORDPRESS_DB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
+    volumes:
+      - wordpress_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  wordpress:
+    image: wordpress:6.8-php8.2-apache
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME:?Set WORDPRESS_DB_NAME in .env}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER:?Set WORDPRESS_DB_USER in .env}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD:?Set WORDPRESS_DB_PASSWORD in .env}
+    ports:
+      - "8080:80"
+    volumes:
+      - wordpress_html:/var/www/html
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$fp=fsockopen('127.0.0.1',80,$$e,$$s,2); if(!$$fp) exit(1); fwrite($$fp,\"GET / HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\"); $$line=fgets($$fp); exit($$line!==false && strncmp($$line,'HTTP/',5)===0?0:1);"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  wordpress-init:
+    image: wordpress:cli-php8.2
+    user: "33:33"
+    depends_on:
+      wordpress:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME:?Set WORDPRESS_DB_NAME in .env}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER:?Set WORDPRESS_DB_USER in .env}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD:?Set WORDPRESS_DB_PASSWORD in .env}
+      WORDPRESS_URL: ${WORDPRESS_URL:?Set WORDPRESS_URL in .env}
+      WORDPRESS_TITLE: ${WORDPRESS_TITLE:-Local Store}
+      WORDPRESS_ADMIN_USER: ${WORDPRESS_ADMIN_USER:?Set WORDPRESS_ADMIN_USER in .env}
+      WORDPRESS_ADMIN_PASSWORD: ${WORDPRESS_ADMIN_PASSWORD:?Set WORDPRESS_ADMIN_PASSWORD in .env}
+      WORDPRESS_ADMIN_EMAIL: ${WORDPRESS_ADMIN_EMAIL:?Set WORDPRESS_ADMIN_EMAIL in .env}
+    volumes:
+      - wordpress_html:/var/www/html
+      - ./deploy/wordpress/init-store.sh:/init-store.sh:ro
+    entrypoint: ["sh", "/init-store.sh"]
+    restart: "no"
+
+  support-mcp:
+    image: urumi-support-mcp:local
+    build:
+      context: .
+      dockerfile: apps/support_mcp/Dockerfile
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  utility-mcp:
+    image: urumi-utility-mcp:local
+    build:
+      context: .
+      dockerfile: apps/utility_mcp/Dockerfile
+    ports:
+      - "8002:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  woocommerce-mcp:
+    image: urumi-woocommerce-mcp:local
+    build:
+      context: .
+      dockerfile: apps/woocommerce_mcp/Dockerfile
+    environment:
+      WOOCOMMERCE_BASE_URL: ${WOOCOMMERCE_BASE_URL:-}
+      WOOCOMMERCE_SITE_URL: ${WORDPRESS_URL:-http://localhost:8080}
+      WOOCOMMERCE_CONSUMER_KEY: ${WOOCOMMERCE_CONSUMER_KEY:-}
+      WOOCOMMERCE_CONSUMER_SECRET: ${WOOCOMMERCE_CONSUMER_SECRET:-}
+      WOOCOMMERCE_TIMEOUT_SECONDS: ${WOOCOMMERCE_TIMEOUT_SECONDS:-8}
+    depends_on:
+      wordpress:
+        condition: service_healthy
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  gateway-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gateway
+      POSTGRES_PASSWORD: ${GATEWAY_DB_PASSWORD:?Set GATEWAY_DB_PASSWORD in .env}
+      POSTGRES_DB: gateway
+    volumes:
+      - gateway_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway -d gateway"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  gateway:
+    image: urumi-gateway:local
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    environment:
+      SUPPORT_MCP_URL: http://support-mcp:8000/mcp
+      UTILITY_MCP_URL: http://utility-mcp:8000/mcp
+      WOOCOMMERCE_MCP_URL: http://woocommerce-mcp:8000/mcp
+      UPSTREAM_TIMEOUT_SECONDS: "20"
+      GATEWAY_DATABASE_URL: postgresql://gateway:${GATEWAY_DB_PASSWORD}@gateway-db:5432/gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      gateway-db:
+        condition: service_healthy
+      support-mcp:
+        condition: service_healthy
+      utility-mcp:
+        condition: service_healthy
+      woocommerce-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  gateway-key:
+    image: urumi-gateway:local
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    environment:
+      GATEWAY_DATABASE_URL: postgresql://gateway:${GATEWAY_DB_PASSWORD}@gateway-db:5432/gateway
+    depends_on:
+      gateway-db:
+        condition: service_healthy
+    entrypoint: ["python", "-m", "apps.gateway.provision"]
+    restart: "no"
+
+volumes:
+  wordpress_db:
+  wordpress_html:
+  gateway_db:

@@ -1,0 +1,126 @@
+{{- if .Values.store.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "urumi.serviceName" (list . "wordpress-init") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "wordpress-init") | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.componentLabels" (list . "wordpress-init") | nindent 8 }}
+      annotations:
+        checksum/store-config: {{ include (print $.Template.BasePath "/store-configmap.yaml") . | sha256sum }}
+        checksum/store-token: {{ .Values.store.rolloutToken | quote }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "urumi.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.store.initPodSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "urumi.selectorLabels" (list . "wordpress") | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: wordpress-init
+          image: {{ include "urumi.image" .Values.store.init.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["sh", "/scripts/init-store.sh"]
+          env:
+            - name: WORDPRESS_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_HOST
+            - name: WORDPRESS_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_NAME
+            - name: WORDPRESS_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_USER
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.storeSecretName" . }}
+                  key: {{ .Values.store.secretKeys.wordpressDbPassword }}
+            - name: WORDPRESS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_URL
+            - name: WORDPRESS_TITLE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_TITLE
+            - name: WORDPRESS_CONFIG_WAIT_ATTEMPTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_CONFIG_WAIT_ATTEMPTS
+            - name: WOOCOMMERCE_DEMO_PAYMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WOOCOMMERCE_DEMO_PAYMENT
+            - name: WORDPRESS_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.storeSecretName" . }}
+                  key: {{ .Values.store.secretKeys.adminUser }}
+            - name: WORDPRESS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.storeSecretName" . }}
+                  key: {{ .Values.store.secretKeys.adminPassword }}
+            - name: WORDPRESS_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.storeSecretName" . }}
+                  key: {{ .Values.store.secretKeys.adminEmail }}
+          {{- with .Values.store.initContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "urumi.resources" .Values.store.init.resources | nindent 10 }}
+          volumeMounts:
+            - name: html
+              mountPath: /var/www/html
+            - name: init-script
+              mountPath: /scripts/init-store.sh
+              subPath: init-store.sh
+              readOnly: true
+      volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: {{ include "urumi.serviceName" (list . "wordpress-data") }}
+        - name: init-script
+          configMap:
+            name: {{ include "urumi.serviceName" (list . "store-config") }}
+            items:
+              - key: init-store.sh
+                path: init-store.sh
+{{- end }}

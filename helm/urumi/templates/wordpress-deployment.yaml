@@ -1,0 +1,119 @@
+{{- if .Values.store.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "urumi.serviceName" (list . "wordpress") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "wordpress") | nindent 4 }}
+spec:
+  replicas: {{ .Values.store.wordpress.replicas }}
+  selector:
+    matchLabels:
+      {{- include "urumi.selectorLabels" (list . "wordpress") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.componentLabels" (list . "wordpress") | nindent 8 }}
+      annotations:
+        checksum/store-config: {{ include (print $.Template.BasePath "/store-configmap.yaml") . | sha256sum }}
+        checksum/store-token: {{ .Values.store.rolloutToken | quote }}
+    spec:
+      serviceAccountName: {{ include "urumi.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.store.wordpressPodSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-mariadb
+          image: {{ include "urumi.image" .Values.store.wordpress.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command:
+            - php
+            - -r
+            - |
+              $host = getenv("WORDPRESS_DB_HOST");
+              $port = (int) getenv("WORDPRESS_DB_PORT");
+              $attempts = (int) getenv("WORDPRESS_DB_WAIT_ATTEMPTS");
+              if ($host === false || $host === "" || $port < 1 || $attempts < 1) {
+                  fwrite(STDERR, "MariaDB wait configuration is incomplete.\n");
+                  exit(1);
+              }
+              for ($i = 0; $i < $attempts; $i++) {
+                  $socket = @fsockopen($host, $port, $errorNumber, $errorText, 2);
+                  if ($socket) {
+                      fclose($socket);
+                      exit(0);
+                  }
+                  sleep(2);
+              }
+              fwrite(STDERR, "MariaDB did not accept connections.\n");
+              exit(1);
+          env:
+            - name: WORDPRESS_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_HOST
+            - name: WORDPRESS_DB_PORT
+              value: {{ .Values.store.mariadb.port | quote }}
+            - name: WORDPRESS_DB_WAIT_ATTEMPTS
+              value: {{ .Values.store.init.dbWaitAttempts | quote }}
+          {{- with .Values.store.wordpressContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "urumi.resources" .Values.store.wordpress.dbWaitResources | nindent 10 }}
+      containers:
+        - name: wordpress
+          image: {{ include "urumi.image" .Values.store.wordpress.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.store.wordpress.port }}
+              protocol: TCP
+          env:
+            - name: WORDPRESS_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_HOST
+            - name: WORDPRESS_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_NAME
+            - name: WORDPRESS_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_USER
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.storeSecretName" . }}
+                  key: {{ .Values.store.secretKeys.wordpressDbPassword }}
+          startupProbe:
+            {{- include "urumi.httpProbe" .Values.store.probes.wordpress.startup | nindent 12 }}
+          livenessProbe:
+            {{- include "urumi.tcpProbe" .Values.store.probes.wordpress.liveness | nindent 12 }}
+          readinessProbe:
+            {{- include "urumi.httpProbe" .Values.store.probes.wordpress.readiness | nindent 12 }}
+          {{- with .Values.store.wordpressContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "urumi.resources" .Values.store.wordpress.resources | nindent 10 }}
+          volumeMounts:
+            - name: html
+              mountPath: /var/www/html
+      volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: {{ include "urumi.serviceName" (list . "wordpress-data") }}
+{{- end }}

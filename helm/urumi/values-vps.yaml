@@ -1,0 +1,142 @@
+# NOT A PRODUCTION CONFIGURATION.
+# Helm can render this file. That does not mean it is safe to install.
+# Replace every replace-me value, the image locations, the storage class,
+# and the resource numbers after measuring a real node. Hosts, image names,
+# storage classes, and Secret names below are placeholders. They are not real
+# credentials, registries, or certificates.
+
+imagePullPolicy: IfNotPresent
+
+# Not install-ready. replace-me is not an ingress-controller namespace.
+# k3s Traefik uses kube-system. An nginx controller often uses ingress-nginx.
+networkPolicy:
+  ingressNamespace: replace-me
+
+gateway:
+  cookieSecure: true
+  upstreamKeySecret: replace-me
+  chatApiSecret: replace-me
+  image:
+    repository: replace-me/urumi-gateway
+    tag: replace-me
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+upstreams:
+  support:
+    image:
+      repository: replace-me/urumi-support-mcp
+      tag: replace-me
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  utility:
+    image:
+      repository: replace-me/urumi-utility-mcp
+      tag: replace-me
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  woocommerce:
+    image:
+      repository: replace-me/urumi-woocommerce-mcp
+      tag: replace-me
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+store:
+  publicUrl: https://store.replace-me.invalid
+  existingSecret: replace-me
+  mariadb:
+    image:
+      repository: mariadb
+      tag: "11.4"
+    persistence:
+      size: 2Gi
+      storageClass: replace-me
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+  wordpress:
+    image:
+      repository: wordpress
+      tag: 6.8-php8.2-apache
+    persistence:
+      size: 2Gi
+      storageClass: replace-me
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 768Mi
+  init:
+    image:
+      repository: wordpress
+      tag: cli-php8.2
+
+woocommerce:
+  existingSecret: replace-me
+
+dashboard:
+  image:
+    repository: replace-me/urumi-dashboard
+    tag: replace-me
+
+ingress:
+  enabled: true
+  className: nginx
+  tls:
+    - secretName: replace-me-tls
+      hosts:
+        - store.replace-me.invalid
+        - gateway.replace-me.invalid
+        - dashboard.replace-me.invalid
+  store:
+    enabled: true
+    host: store.replace-me.invalid
+  gateway:
+    enabled: true
+    host: gateway.replace-me.invalid
+  dashboard:
+    enabled: true
+    host: dashboard.replace-me.invalid
+
+database:
+  existingSecret: replace-me
+  image:
+    repository: postgres
+    tag: 16-alpine
+  persistence:
+    size: 1Gi
+    storageClass: replace-me
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi

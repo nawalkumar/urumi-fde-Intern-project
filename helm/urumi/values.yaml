@@ -1,0 +1,424 @@
+# Defaults for the first chart milestone.
+# Committed files contain no passwords. Supply an existing Secret or a
+# gitignored values file. See README.md before rendering a real release.
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+imagePullPolicy: IfNotPresent
+automountServiceAccountToken: false
+
+# Shared contexts also apply to PostgreSQL. Leave them empty. The PostgreSQL
+# entrypoint starts as root to prepare the data directory.
+podSecurityContext: {}
+containerSecurityContext: {}
+
+# Gateway and MCP images run as urumi, UID and GID 10001. These contexts are
+# applied only to those Deployments. The root filesystem stays writable because
+# that image behavior has not been verified read-only.
+pythonPodSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+pythonContainerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  mcpPort: 8000
+
+gateway:
+  replicas: 1
+  image:
+    repository: urumi-gateway
+    tag: local
+  # Compose sets 20. The process uses 5 only when this variable is absent.
+  upstreamTimeoutSeconds: 20
+  # False keeps local HTTP usable. Production values set this true.
+  cookieSecure: false
+  # Cluster service addresses are private. Loopback and metadata stay blocked.
+  allowPrivateUpstreams: true
+  # Name of an existing Secret. The key value is not stored in this file.
+  upstreamKeySecret: ""
+  upstreamKeySecretKey: GATEWAY_UPSTREAM_KEY
+  # Optional key in that same Secret, used only while credentials are re-saved.
+  upstreamKeyPreviousSecretKey: ""
+  # Name of an existing Secret that holds CHAT_API_KEY. The value is not stored here.
+  chatApiSecret: ""
+  chatApiSecretKey: CHAT_API_KEY
+  chatMaxToolCalls: 4
+  chatProviderTimeoutSeconds: 20
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+upstreams:
+  support:
+    component: support-mcp
+    module: apps.support_mcp.app.main:app
+    enabled: true
+    replicas: 1
+    image:
+      repository: urumi-support-mcp
+      tag: local
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+  utility:
+    component: utility-mcp
+    module: apps.utility_mcp.app.main:app
+    enabled: true
+    replicas: 1
+    image:
+      repository: urumi-utility-mcp
+      tag: local
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+  woocommerce:
+    component: woocommerce-mcp
+    module: apps.woocommerce_mcp.app.main:app
+    enabled: true
+    replicas: 1
+    image:
+      repository: urumi-woocommerce-mcp
+      tag: local
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+# WooCommerce tools stay unregistered until consumer keys are present.
+# All three of baseUrl, consumer key, and consumer secret must be usable
+# before product or order tools register.
+woocommerce:
+  baseUrl: ""
+  siteUrl: ""
+  timeoutSeconds: 8
+  existingSecret: ""
+  consumerKeyKey: WOOCOMMERCE_CONSUMER_KEY
+  consumerSecretKey: WOOCOMMERCE_CONSUMER_SECRET
+
+# WordPress and MariaDB use new PersistentVolumeClaims. Do not point them at
+# the Compose volumes. Passwords stay in an existing Secret or a gitignored
+# values file. An empty publicUrl fails rendering while the store is enabled.
+store:
+  enabled: true
+  publicUrl: ""
+  title: Local Store
+  # Empty leaves payment methods unchanged. cod enables WooCommerce Cash on delivery.
+  # The init Job does not create products or orders.
+  demoPayment: cod
+  databaseName: wordpress
+  databaseUser: wordpress
+  existingSecret: ""
+  # Changing this restarts store pods. It does not alter a password already
+  # stored in an initialized MariaDB data directory.
+  rolloutToken: ""
+  secretKeys:
+    mariadbRootPassword: MARIADB_ROOT_PASSWORD
+    mariadbPassword: MARIADB_PASSWORD
+    wordpressDbPassword: WORDPRESS_DB_PASSWORD
+    adminUser: WORDPRESS_ADMIN_USER
+    adminPassword: WORDPRESS_ADMIN_PASSWORD
+    adminEmail: WORDPRESS_ADMIN_EMAIL
+  mariadb:
+    replicas: 1
+    port: 3306
+    rootPassword: ""
+    password: ""
+    image:
+      repository: mariadb
+      tag: "11.4"
+    persistence:
+      size: 2Gi
+      storageClass: ""
+      retain: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+  wordpress:
+    replicas: 1
+    port: 80
+    adminUser: ""
+    adminPassword: ""
+    adminEmail: ""
+    image:
+      repository: wordpress
+      tag: 6.8-php8.2-apache
+    persistence:
+      size: 2Gi
+      storageClass: ""
+      retain: true
+    dbWaitResources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 768Mi
+  init:
+    image:
+      repository: wordpress
+      tag: cli-php8.2
+    dbWaitAttempts: 180
+    # The init Job starts with the WordPress pod and waits for wp-config.php.
+    # Each database attempt can take about four seconds, so this must stay
+    # larger than dbWaitAttempts or the Job can exit before wp-config.php exists.
+    configWaitAttempts: 420
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  # Official MariaDB and WordPress entrypoints start as root. runAsNonRoot is
+  # not set on those containers. The CLI image already runs as www-data.
+  mariadbPodSecurityContext:
+    fsGroup: 999
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  mariadbContainerSecurityContext:
+    allowPrivilegeEscalation: false
+  wordpressPodSecurityContext:
+    fsGroup: 33
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  wordpressContainerSecurityContext:
+    allowPrivilegeEscalation: false
+  initPodSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 33
+    runAsGroup: 33
+    fsGroup: 33
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  initContainerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  probes:
+    mariadb:
+      startup:
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 30
+      liveness:
+        initialDelaySeconds: 30
+        periodSeconds: 20
+        timeoutSeconds: 5
+        failureThreshold: 6
+      readiness:
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 6
+    wordpress:
+      startup:
+        path: /
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 30
+      liveness:
+        initialDelaySeconds: 30
+        periodSeconds: 20
+        timeoutSeconds: 3
+        failureThreshold: 6
+      readiness:
+        path: /
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 6
+
+# Ingress is rendered only when enabled. The controller is not installed here.
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  tls: []
+  store:
+    enabled: true
+    host: ""
+  gateway:
+    enabled: false
+    host: ""
+  dashboard:
+    enabled: false
+    host: ""
+
+# The dashboard image serves the Vite production build. Nginx proxies /admin
+# to the gateway Service. The browser stays on the dashboard host.
+dashboard:
+  enabled: true
+  replicas: 1
+  port: 80
+  containerPort: 8080
+  image:
+    repository: urumi-dashboard
+    tag: local
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+# Policies are rendered for clusters whose CNI enforces them. Kind's default
+# kindnet does not enforce NetworkPolicy.
+networkPolicy:
+  enabled: true
+  ingressNamespace: ingress-nginx
+  allowExternalEgress: true
+
+database:
+  replicas: 1
+  user: gateway
+  name: gateway
+  port: 5432
+  image:
+    repository: postgres
+    tag: 16-alpine
+  # Set one of these. Never commit a real password.
+  existingSecret: ""
+  password: ""
+  # Change this after rotating an existing Secret so pods restart.
+  # Do not put the password in this value.
+  rolloutToken: ""
+  secretKeys:
+    password: POSTGRES_PASSWORD
+    conninfo: GATEWAY_DATABASE_URL
+  persistence:
+    size: 1Gi
+    # Empty uses the cluster default StorageClass.
+    storageClass: ""
+    retain: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+probes:
+  gateway:
+    startup:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 30
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 6
+    readiness:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 6
+  upstream:
+    startup:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 30
+    liveness:
+      path: /health
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 5
+    readiness:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 5
+  dashboard:
+    startup:
+      path: /
+      initialDelaySeconds: 3
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 12
+    liveness:
+      path: /
+      initialDelaySeconds: 10
+      periodSeconds: 20
+      timeoutSeconds: 3
+      failureThreshold: 6
+    readiness:
+      path: /
+      initialDelaySeconds: 3
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 6
+  postgres:
+    startup:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 30
+    liveness:
+      initialDelaySeconds: 20
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6

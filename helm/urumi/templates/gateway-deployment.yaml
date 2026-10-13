@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "urumi.serviceName" (list . "gateway") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "gateway") | nindent 4 }}
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector:
+    matchLabels:
+      {{- include "urumi.selectorLabels" (list . "gateway") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.componentLabels" (list . "gateway") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/database-token: {{ .Values.database.rolloutToken | quote }}
+    spec:
+      serviceAccountName: {{ include "urumi.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pythonPodSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          image: {{ include "urumi.image" .Values.gateway.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command:
+            - uvicorn
+            - "apps.gateway.app.main:app"
+            - --host
+            - 0.0.0.0
+            - --port
+            - {{ .Values.service.mcpPort | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.mcpPort }}
+              protocol: TCP
+          env:
+            - name: SUPPORT_MCP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: SUPPORT_MCP_URL
+            - name: UTILITY_MCP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: UTILITY_MCP_URL
+            - name: WOOCOMMERCE_MCP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: WOOCOMMERCE_MCP_URL
+            - name: UPSTREAM_TIMEOUT_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: UPSTREAM_TIMEOUT_SECONDS
+            - name: GATEWAY_COOKIE_SECURE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: GATEWAY_COOKIE_SECURE
+            - name: UPSTREAM_ALLOW_PRIVATE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: UPSTREAM_ALLOW_PRIVATE
+            - name: CHAT_MAX_TOOL_CALLS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: CHAT_MAX_TOOL_CALLS
+            - name: CHAT_PROVIDER_TIMEOUT_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: CHAT_PROVIDER_TIMEOUT_SECONDS
+            {{- if .Values.gateway.chatApiSecret }}
+            - name: CHAT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gateway.chatApiSecret }}
+                  key: {{ .Values.gateway.chatApiSecretKey }}
+                  optional: true
+            {{- end }}
+            {{- if .Values.gateway.upstreamKeySecret }}
+            - name: GATEWAY_UPSTREAM_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gateway.upstreamKeySecret }}
+                  key: {{ .Values.gateway.upstreamKeySecretKey }}
+                  optional: true
+            {{- if .Values.gateway.upstreamKeyPreviousSecretKey }}
+            - name: GATEWAY_UPSTREAM_KEY_PREVIOUS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gateway.upstreamKeySecret }}
+                  key: {{ .Values.gateway.upstreamKeyPreviousSecretKey }}
+                  optional: true
+            {{- end }}
+            {{- end }}
+            - name: SUPPORT_MCP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: SUPPORT_MCP_ENABLED
+            - name: UTILITY_MCP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: UTILITY_MCP_ENABLED
+            - name: WOOCOMMERCE_MCP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" . }}
+                  key: WOOCOMMERCE_MCP_ENABLED
+            - name: GATEWAY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.databaseSecretName" . }}
+                  key: {{ .Values.database.secretKeys.conninfo }}
+          startupProbe:
+            {{- include "urumi.httpProbe" .Values.probes.gateway.startup | nindent 12 }}
+          livenessProbe:
+            {{- include "urumi.tcpProbe" .Values.probes.gateway.liveness | nindent 12 }}
+          readinessProbe:
+            {{- include "urumi.httpProbe" .Values.probes.gateway.readiness | nindent 12 }}
+          {{- with .Values.pythonContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "urumi.resources" .Values.gateway.resources | nindent 10 }}

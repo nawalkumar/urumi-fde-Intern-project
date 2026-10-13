@@ -1,0 +1,94 @@
+{{- range $id, $upstream := .Values.upstreams }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "urumi.serviceName" (list $ $upstream.component) }}
+  labels:
+    {{- include "urumi.componentLabels" (list $ $upstream.component) | nindent 4 }}
+spec:
+  replicas: {{ $upstream.replicas }}
+  selector:
+    matchLabels:
+      {{- include "urumi.selectorLabels" (list $ $upstream.component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.componentLabels" (list $ $upstream.component) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "urumi.serviceAccountName" $ }}
+      automountServiceAccountToken: {{ $.Values.automountServiceAccountToken }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.pythonPodSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mcp
+          image: {{ include "urumi.image" $upstream.image | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          command:
+            - uvicorn
+            - {{ $upstream.module | quote }}
+            - --host
+            - 0.0.0.0
+            - --port
+            - {{ $.Values.service.mcpPort | quote }}
+          ports:
+            - name: http
+              containerPort: {{ $.Values.service.mcpPort }}
+              protocol: TCP
+          env:
+            - name: {{ printf "%s_MCP_ENABLED" ($id | upper) | quote }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" $ }}
+                  key: {{ printf "%s_MCP_ENABLED" ($id | upper) | quote }}
+            {{- if eq $id "woocommerce" }}
+            - name: WOOCOMMERCE_TIMEOUT_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.configName" $ }}
+                  key: WOOCOMMERCE_TIMEOUT_SECONDS
+            {{- $wooBase := include "urumi.wooBaseUrl" $ }}
+            {{- if $wooBase }}
+            - name: WOOCOMMERCE_BASE_URL
+              value: {{ $wooBase | quote }}
+            {{- end }}
+            {{- $wooSite := include "urumi.wooSiteUrl" $ }}
+            {{- if $wooSite }}
+            - name: WOOCOMMERCE_SITE_URL
+              value: {{ $wooSite | quote }}
+            {{- end }}
+            {{- if $.Values.woocommerce.existingSecret }}
+            - name: WOOCOMMERCE_CONSUMER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.woocommerce.existingSecret }}
+                  key: {{ $.Values.woocommerce.consumerKeyKey }}
+                  optional: true
+            - name: WOOCOMMERCE_CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.woocommerce.existingSecret }}
+                  key: {{ $.Values.woocommerce.consumerSecretKey }}
+                  optional: true
+            {{- end }}
+            {{- end }}
+          startupProbe:
+            {{- include "urumi.httpProbe" $.Values.probes.upstream.startup | nindent 12 }}
+          livenessProbe:
+            {{- include "urumi.httpProbe" $.Values.probes.upstream.liveness | nindent 12 }}
+          readinessProbe:
+            {{- include "urumi.httpProbe" $.Values.probes.upstream.readiness | nindent 12 }}
+          {{- with $.Values.pythonContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "urumi.resources" $upstream.resources | nindent 10 }}
+{{- end }}

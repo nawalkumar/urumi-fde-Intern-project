@@ -1,0 +1,20 @@
+{{- include "urumi.validate" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "urumi.configName" . }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "config") | nindent 4 }}
+data:
+  SUPPORT_MCP_URL: {{ printf "http://%s:%v/mcp" (include "urumi.serviceName" (list . .Values.upstreams.support.component)) .Values.service.mcpPort | quote }}
+  UTILITY_MCP_URL: {{ printf "http://%s:%v/mcp" (include "urumi.serviceName" (list . .Values.upstreams.utility.component)) .Values.service.mcpPort | quote }}
+  WOOCOMMERCE_MCP_URL: {{ printf "http://%s:%v/mcp" (include "urumi.serviceName" (list . .Values.upstreams.woocommerce.component)) .Values.service.mcpPort | quote }}
+  UPSTREAM_TIMEOUT_SECONDS: {{ .Values.gateway.upstreamTimeoutSeconds | quote }}
+  GATEWAY_COOKIE_SECURE: {{ .Values.gateway.cookieSecure | quote }}
+  UPSTREAM_ALLOW_PRIVATE: {{ .Values.gateway.allowPrivateUpstreams | quote }}
+  CHAT_MAX_TOOL_CALLS: {{ .Values.gateway.chatMaxToolCalls | quote }}
+  CHAT_PROVIDER_TIMEOUT_SECONDS: {{ .Values.gateway.chatProviderTimeoutSeconds | quote }}
+  SUPPORT_MCP_ENABLED: {{ .Values.upstreams.support.enabled | quote }}
+  UTILITY_MCP_ENABLED: {{ .Values.upstreams.utility.enabled | quote }}
+  WOOCOMMERCE_MCP_ENABLED: {{ .Values.upstreams.woocommerce.enabled | quote }}
+  WOOCOMMERCE_TIMEOUT_SECONDS: {{ .Values.woocommerce.timeoutSeconds | quote }}

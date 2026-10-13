@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "urumi.databaseHost" . }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "gateway-db") | nindent 4 }}
+spec:
+  serviceName: {{ include "urumi.databaseHost" . }}
+  replicas: {{ .Values.database.replicas }}
+  selector:
+    matchLabels:
+      {{- include "urumi.selectorLabels" (list . "gateway-db") | nindent 6 }}
+  {{- if .Values.database.persistence.retain }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.componentLabels" (list . "gateway-db") | nindent 8 }}
+      annotations:
+        checksum/database-token: {{ .Values.database.rolloutToken | quote }}
+    spec:
+      serviceAccountName: {{ include "urumi.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: postgres
+          image: {{ include "urumi.image" .Values.database.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: {{ .Values.database.port }}
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.database.user | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.database.name | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.databaseSecretName" . }}
+                  key: {{ .Values.database.secretKeys.password }}
+          startupProbe:
+            {{- include "urumi.postgresProbe" (list . .Values.probes.postgres.startup) | nindent 12 }}
+          livenessProbe:
+            {{- include "urumi.postgresProbe" (list . .Values.probes.postgres.liveness) | nindent 12 }}
+          readinessProbe:
+            {{- include "urumi.postgresProbe" (list . .Values.probes.postgres.readiness) | nindent 12 }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "urumi.resources" .Values.database.resources | nindent 10 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "urumi.componentLabels" (list . "gateway-db") | nindent 10 }}
+        {{- if .Values.database.persistence.retain }}
+        annotations:
+          helm.sh/resource-policy: keep
+        {{- end }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.database.persistence.size }}
+        {{- if .Values.database.persistence.storageClass }}
+        storageClassName: {{ .Values.database.persistence.storageClass | quote }}
+        {{- end }}

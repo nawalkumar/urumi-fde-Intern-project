@@ -1,0 +1,1 @@
+"""FastAPI MCP gateway."""

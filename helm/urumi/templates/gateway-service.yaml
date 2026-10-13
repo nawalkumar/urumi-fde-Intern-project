@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "urumi.serviceName" (list . "gateway") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "gateway") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "urumi.selectorLabels" (list . "gateway") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.mcpPort }}
+      targetPort: http
+      protocol: TCP

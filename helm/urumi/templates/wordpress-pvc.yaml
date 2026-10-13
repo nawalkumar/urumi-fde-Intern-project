@@ -1,0 +1,21 @@
+{{- if .Values.store.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "urumi.serviceName" (list . "wordpress-data") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "wordpress") | nindent 4 }}
+  {{- if .Values.store.wordpress.persistence.retain }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.store.wordpress.persistence.size }}
+  {{- if .Values.store.wordpress.persistence.storageClass }}
+  storageClassName: {{ .Values.store.wordpress.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}

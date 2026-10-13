@@ -1,0 +1,17 @@
+{{- if .Values.store.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "urumi.serviceName" (list . "store-db") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "store-db") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "urumi.selectorLabels" (list . "store-db") | nindent 4 }}
+  ports:
+    - name: mysql
+      port: {{ .Values.store.mariadb.port }}
+      targetPort: mysql
+      protocol: TCP
+{{- end }}

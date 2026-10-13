@@ -1,0 +1,99 @@
+# Local rendering overlay. These sizes are provisional guesses for a laptop
+# or a future local cluster. They are not a measured capacity plan.
+# Images are expected only after a local docker build and a load into the node.
+# These tags are k8s-test so a cluster build does not replace the Compose :local tags.
+# Ingress is rendered for store.local. This file does not install a controller.
+
+imagePullPolicy: IfNotPresent
+
+gateway:
+  image:
+    repository: urumi-gateway
+    tag: k8s-test
+  upstreamKeySecret: urumi-dev-gateway-keys
+  chatApiSecret: urumi-dev-chat
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+upstreams:
+  support:
+    image:
+      tag: k8s-test
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+  utility:
+    image:
+      tag: k8s-test
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+  woocommerce:
+    image:
+      tag: k8s-test
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+store:
+  publicUrl: http://store.local
+  existingSecret: urumi-dev-store-credentials
+  mariadb:
+    persistence:
+      size: 2Gi
+      storageClass: ""
+  wordpress:
+    persistence:
+      size: 2Gi
+      storageClass: ""
+
+woocommerce:
+  existingSecret: urumi-dev-woocommerce-credentials
+
+dashboard:
+  image:
+    repository: urumi-dashboard
+    tag: k8s-test
+
+ingress:
+  enabled: true
+  className: nginx
+  store:
+    enabled: true
+    host: store.local
+  gateway:
+    enabled: true
+    host: gateway.local
+  dashboard:
+    enabled: true
+    host: dashboard.local
+
+database:
+  existingSecret: urumi-dev-gateway-credentials
+  persistence:
+    size: 1Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

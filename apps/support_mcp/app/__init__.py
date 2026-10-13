@@ -1,0 +1,1 @@
+"""Support Notes MCP server."""

@@ -1,0 +1,18 @@
+{{- range $id, $upstream := .Values.upstreams }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "urumi.serviceName" (list $ $upstream.component) }}
+  labels:
+    {{- include "urumi.componentLabels" (list $ $upstream.component) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "urumi.selectorLabels" (list $ $upstream.component) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $.Values.service.mcpPort }}
+      targetPort: http
+      protocol: TCP
+{{- end }}

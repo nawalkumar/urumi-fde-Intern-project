@@ -1,0 +1,99 @@
+{{- if .Values.store.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "urumi.serviceName" (list . "store-db") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "store-db") | nindent 4 }}
+spec:
+  serviceName: {{ include "urumi.serviceName" (list . "store-db") }}
+  replicas: {{ .Values.store.mariadb.replicas }}
+  selector:
+    matchLabels:
+      {{- include "urumi.selectorLabels" (list . "store-db") | nindent 6 }}
+  {{- if .Values.store.mariadb.persistence.retain }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.componentLabels" (list . "store-db") | nindent 8 }}
+      annotations:
+        checksum/store-config: {{ include (print $.Template.BasePath "/store-configmap.yaml") . | sha256sum }}
+        checksum/store-token: {{ .Values.store.rolloutToken | quote }}
+    spec:
+      serviceAccountName: {{ include "urumi.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.store.mariadbPodSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mariadb
+          image: {{ include "urumi.image" .Values.store.mariadb.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: mysql
+              containerPort: {{ .Values.store.mariadb.port }}
+              protocol: TCP
+          env:
+            - name: MARIADB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_NAME
+            - name: MARIADB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "urumi.serviceName" (list . "store-config") }}
+                  key: WORDPRESS_DB_USER
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.storeSecretName" . }}
+                  key: {{ .Values.store.secretKeys.mariadbPassword }}
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.storeSecretName" . }}
+                  key: {{ .Values.store.secretKeys.mariadbRootPassword }}
+          startupProbe:
+            {{- include "urumi.mariadbProbe" (list . .Values.store.probes.mariadb.startup) | nindent 12 }}
+          livenessProbe:
+            {{- include "urumi.mariadbProbe" (list . .Values.store.probes.mariadb.liveness) | nindent 12 }}
+          readinessProbe:
+            {{- include "urumi.mariadbProbe" (list . .Values.store.probes.mariadb.readiness) | nindent 12 }}
+          {{- with .Values.store.mariadbContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "urumi.resources" .Values.store.mariadb.resources | nindent 10 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "urumi.componentLabels" (list . "store-db") | nindent 10 }}
+        {{- if .Values.store.mariadb.persistence.retain }}
+        annotations:
+          helm.sh/resource-policy: keep
+        {{- end }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.store.mariadb.persistence.size }}
+        {{- if .Values.store.mariadb.persistence.storageClass }}
+        storageClassName: {{ .Values.store.mariadb.persistence.storageClass | quote }}
+        {{- end }}
+{{- end }}
