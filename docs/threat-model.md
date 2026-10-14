@@ -48,7 +48,7 @@ A trusted environment upstream skips URL validation. An untrusted dynamic upstre
 
 `GET /admin/status` accepts a live API key through `require_live_principal` and does not accept the dashboard session (`main.py` `register_status`). Unset, empty, or `open` `GATEWAY_STATUS_PERMISSION` does not check `gateway__read_status`. `required` does, and a missing grant returns HTTP 403. Any other value raises `StatusPermissionConfigError` at configuration (`config.py` `status_permission_mode`). This grant does not authorize other `/admin` routes.
 
-Admin mutations use `_session_token`: the `urumi_session` cookie or an `Authorization` bearer token that starts with `urs_`. An `urk_` key is not a session. Members list and revoke only their own keys and read only their own audit rows. `_same_site_request` requires `x-urumi-request: 1` and rejects `Sec-Fetch-Site: cross-site`.
+Admin mutations use `_session_token`: the `urumi_session` cookie or an `Authorization` bearer token that starts with `urs_`. An `urk_` key is not a session. Members issue, list, and revoke only their own keys and read only their own audit rows. A member `POST /admin/keys` with another user's id returns 403 and no key. `_same_site_request` requires `x-urumi-request: 1` and rejects `Sec-Fetch-Site: cross-site`.
 
 The login cookie is HttpOnly and `SameSite=lax`. `secure` follows `GATEWAY_COOKIE_SECURE`, which defaults to false. `LoginLimiter` counts failures in this process only.
 
@@ -127,4 +127,14 @@ AES-GCM in `secretsbox.py` encrypts dynamic upstream credentials in the applicat
 - `LoginLimiter` does not survive another gateway process. That is stated in source and is not a multi-process test.
 - No application statement updates or deletes `gateway_audit_log`. Whether a database administrator can is outside the application.
 - The storefront documents named at the top of this file still disagree. This note does not say which access path works.
-- CI run `38537165909` covers commit `d7ddff1` only. It does not cover this file, `docs/design.md`, or the uncommitted README edit.
+- CI run `38537165909` covers commit `d7ddff1` only. It does not cover this file, `docs/design.md`, or later commits.
+
+## Assignment questions
+
+1. **What a member can do with shared upstream credentials they never see.** A member can call tools an administrator granted to that member's own key. The gateway attaches the upstream credential on the server when it calls that upstream. The member does not receive the credential in the dashboard, the tool result, or the audit row. A member cannot register upstreams, read the upstream catalog, or grant tools.
+
+2. **Why client API tokens are not forwarded to upstream servers.** `ApiKeyGuard` accepts the caller's `urk_` key and stops. `Registry` then calls the selected upstream with that upstream's own authorization, which is empty for the static Support, Utility, and WooCommerce processes or a sealed dynamic credential opened only in the gateway process. The caller's key is not copied onto the upstream request. Chat uses the same `ToolDispatcher`.
+
+3. **How malicious upstream tool descriptions could manipulate the model, and what mitigations exist.** Tool names and descriptions are model-visible instructions. A hostile upstream can try to make the model call a granted tool or treat tool text as a new instruction. Chat labels returned tool text `Untrusted tool data` and limits the number of tool calls. The MCP result path does not add that label. Mitigations that are implemented are exact grants with no wildcard, omitting disabled and failed upstreams, and excluding colliding public names. They do not stop a granted tool's description from steering the model.
+
+4. **What one team member can and cannot do to another.** A member can issue, list, and revoke only that member's keys and can read only that member's audit rows. A member cannot list users, issue a key for someone else, grant or revoke another person's tools, change roles, disable another user, or manage upstreams. Those actions require an administrator session. An API key is not that session.

@@ -98,7 +98,7 @@ Upstream ids must be unique and must not contain `__`. Two registrations that wo
 | Allows | `POST /mcp` for granted tools | `/admin` routes for that user |
 | Does not allow | Admin mutations | Tool execution by itself |
 
-An administrator can create members, change roles, disable users, issue and revoke keys, grant and revoke exact permissions, and register, edit, disable, or remove dynamic upstreams. A member can list and revoke only that member's keys and can read only that member's audit rows. Disabling a user revokes that user's sessions.
+An administrator can create members, change roles, disable users, issue and revoke keys, grant and revoke exact permissions, and register, edit, disable, or remove dynamic upstreams. A member can issue, list, and revoke only that member's keys and can read only that member's audit rows. A member cannot issue a key for someone else, grant tools, or manage upstreams. Disabling a user revokes that user's sessions.
 
 Create the first administrator with the password written to a new file outside the repository. The command does not print the password.
 
@@ -247,6 +247,18 @@ WooCommerce product and order tools register only when `WOOCOMMERCE_BASE_URL`, `
 
 `helm/urumi/README.md` is the chart guide. `values-dev.yaml` is a local overlay: image tag `k8s-test`, HTTP hosts `store.local`, `gateway.local`, and `dashboard.local`. `values-vps.yaml` is a worksheet of `replace-me` placeholders. It is not a production configuration.
 
+The chart does not install an Ingress controller. On the dev Kind cluster, `ingress-nginx` is installed separately and the node is labeled `ingress-ready=true`. The controller listens on port 80 inside the dev node. That port is not published to the WSL host. Host ports 80 and 443 are published by `urumi-k8s-test-control-plane`, and `http://store.local/` on port 80 is reset. `store.local` resolves to `127.0.0.1`.
+
+From WSL, the dev Ingress is reachable by sending the host header to the dev node IP:
+
+```bash
+curl --resolve store.local:80:172.19.0.2 http://store.local/
+curl --resolve dashboard.local:80:172.19.0.2 http://dashboard.local/
+curl --resolve gateway.local:80:172.19.0.2 http://gateway.local/health
+```
+
+Recheck the node address with `kubectl get nodes -o wide` before using it. WordPress `home` and `siteurl` stay `http://store.local`. A browser that opens that name on port 80 still reaches the test cluster, not this Ingress. Changing the Windows hosts file or the host firewall is outside this setup. Evidence is in `docs/baseline-verification.md`.
+
 The chart does not build images. A node runs only an image that has been built and loaded or pulled. Building `:local` for Compose does not update a cluster tag.
 
 Render and lint without installing:
@@ -275,7 +287,7 @@ There is no separate production deployment in this repository beyond that VPS wo
 
 - The audit insert is not in the same database transaction as the mutation. A crash after the commit, or a failed audit insert, can leave a committed change without the expected audit row. `Auditor.record` logs the exception type and does not change the HTTP result.
 - Registry refresh compensation undoes the upstream write when it can. It is not a single transaction wrapped around the in-process refresh.
-- Dashboard chat was not exercised against a live model provider in this repository's automated tests.
+- Dashboard chat tests mock the model provider. The dev cluster has no `urumi-dev-chat` Secret, so `CHAT_API_KEY` is unset and a live model session was not run.
 - Resource requests in the chart are placeholders, not a measured capacity plan.
 - This checkout's tests do not prove that an already running cluster is serving this source.
 
