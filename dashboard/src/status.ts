@@ -175,6 +175,16 @@ export function listingLabel(state: string): string {
   return LISTING_LABELS[state] ?? "Unrecognized";
 }
 
+export function connectionLabel(upstream: UpstreamStatus): "Connected" | "Unreachable" | "Disabled" {
+  if (!upstream.enabled || upstream.listing_state === "disabled") {
+    return "Disabled";
+  }
+  if (upstream.listing_state === "listing_ok") {
+    return "Connected";
+  }
+  return "Unreachable";
+}
+
 export function listingClass(state: string): string {
   switch (state) {
     case "listing_ok":

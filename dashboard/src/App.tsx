@@ -3,6 +3,7 @@ import { AdminPanel } from "./admin/AdminPanel";
 import { fetchStatus, StatusRequestError } from "./api";
 import {
   advertisedTotalHint,
+  connectionLabel,
   formatCount,
   formatRefreshTime,
   listingClass,
@@ -258,6 +259,9 @@ function UpstreamCard({
   return (
     <article className="card" aria-labelledby={headingId}>
       <h3 id={headingId}>{upstream.id}</h3>
+      <p>
+        Connection: <strong>{connectionLabel(upstream)}</strong>
+      </p>
       <p>
         Enabled state: <strong>{upstream.enabled ? "Enabled" : "Disabled"}</strong>
       </p>

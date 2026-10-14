@@ -220,6 +220,47 @@ test("upstream diagnostics show a collision and an empty state", async () => {
   expect(screen.queryByText("tool_excluded")).not.toBeInTheDocument();
 });
 
+test("a member can issue only their own API key", async () => {
+  const user = userEvent.setup();
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (url === "/admin/keys" && method === "POST") {
+        calls.push(typeof init?.body === "string" ? init.body : "");
+        return json(201, { key_id: "ffeeddccbbaa9988", api_key: "urk_member.shown-once", user_id: "def" });
+      }
+      if (url === "/admin/me") {
+        return json(401, { error: "invalid_token" });
+      }
+      if (url === "/admin/login") {
+        return json(200, { user_id: "def", username: "bea", role: "member", disabled: false });
+      }
+      if (url === "/admin/keys" && method === "GET") {
+        return json(200, { keys: [] });
+      }
+      if (url === "/admin/audit") {
+        return json(200, { entries: [] });
+      }
+      return json(403, { error_description: "The request was rejected." });
+    }),
+  );
+
+  render(<AdminPanel />);
+  await user.click(screen.getByRole("button", { name: "Open team administration" }));
+  await user.type(screen.getByLabelText("Username"), "bea");
+  await user.type(screen.getByLabelText("Password"), "temporary");
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  expect(await screen.findByText(/Signed in as bea \(member\)/)).toBeInTheDocument();
+  expect(screen.queryByLabelText("User for new key")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Create member" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Issue my API key" }));
+  expect(await screen.findByText("API key, shown once: urk_member.shown-once")).toBeInTheDocument();
+  expect(calls).toEqual([JSON.stringify({ user_id: "def" })]);
+});
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,

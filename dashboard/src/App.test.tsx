@@ -173,6 +173,7 @@ describe("status dashboard", () => {
     expect(metric("Advertised tools")).toBe("2");
 
     const woo = screen.getByRole("article", { name: "woocommerce" });
+    expect(woo).toHaveTextContent("Connection: Connected");
     expect(woo).toHaveTextContent("Enabled state: Enabled");
     expect(woo).toHaveTextContent("Listing state: Listing succeeded");
     expect(woo).toHaveTextContent("Advertised tools: 1");
@@ -188,6 +189,7 @@ describe("status dashboard", () => {
     const flaky = screen.getByRole("article", { name: "flaky" });
     const support = screen.getByRole("article", { name: "support" });
 
+    expect(flaky).toHaveTextContent("Connection: Unreachable");
     expect(flaky).toHaveTextContent("Enabled state: Enabled");
     expect(flaky).toHaveTextContent("Listing state: Listing failed");
     expect(flaky).toHaveTextContent("Advertised tools: Unknown");
@@ -195,6 +197,7 @@ describe("status dashboard", () => {
     expect(flaky).toHaveTextContent("Upstream flaky was omitted from tool discovery.");
     expect(flaky.querySelector(".state-failed")).not.toBeNull();
 
+    expect(support).toHaveTextContent("Connection: Disabled");
     expect(support).toHaveTextContent("Enabled state: Disabled");
     expect(support).toHaveTextContent("Listing state: Disabled");
     expect(support).toHaveTextContent("Advertised tools: 0");

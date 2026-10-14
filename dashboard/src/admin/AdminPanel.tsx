@@ -454,7 +454,11 @@ function KeyManager({ actor, onNotice }: { actor: SessionUser; onNotice: (messag
     if (!selectedUser) {
       return;
     }
-    const result = await adminRequest("/admin/keys", "POST", { user_id: userId });
+    await issueFor(userId);
+  }
+
+  async function issueFor(ownerId: string) {
+    const result = await adminRequest("/admin/keys", "POST", { user_id: ownerId });
     if (result.status !== 201 || !isRecord(result.body) || typeof result.body.api_key !== "string") {
       onNotice(errorText(result.body));
       return;
@@ -544,6 +548,16 @@ function KeyManager({ actor, onNotice }: { actor: SessionUser; onNotice: (messag
             Dismiss API key
           </button>
         </div>
+      ) : null}
+      {actor.role === "member" ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void issueFor(actor.user_id);
+          }}
+        >
+          <button type="submit">Issue my API key</button>
+        </form>
       ) : null}
       {actor.role === "admin" ? (
         <form onSubmit={(event) => void issue(event)}>

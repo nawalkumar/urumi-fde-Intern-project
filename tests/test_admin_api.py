@@ -63,6 +63,7 @@ async def test_admin_session_manages_members_keys_and_upstreams(launch_app, monk
         assert "initial_password" not in listed.text
         assert "verifier" not in listed.text
         member_id = next(row["user_id"] for row in listed.json()["users"] if row["username"] == "bea")
+        admin_id = next(row["user_id"] for row in listed.json()["users"] if row["username"] == "ada")
         issued = admin.post("/admin/keys", json={"user_id": member_id})
         assert issued.status_code == 201
         raw_key = issued.json()["api_key"]
@@ -96,6 +97,17 @@ async def test_admin_session_manages_members_keys_and_upstreams(launch_app, monk
         assert member.post(f"/admin/keys/{key_id}/permissions", json={"tool_name": "utility__ping"}).status_code == 403
         own = member.get("/admin/keys").json()["keys"]
         assert [row["key_id"] for row in own] == [key_id]
+        member_id_self = signed_in.json()["user_id"]
+        denied_other = member.post("/admin/keys", json={"user_id": admin_id})
+        assert denied_other.status_code == 403
+        assert "api_key" not in denied_other.text
+        issued_own = member.post("/admin/keys", json={"user_id": member_id_self})
+        assert issued_own.status_code == 201
+        assert issued_own.json()["user_id"] == member_id_self
+        own_key = issued_own.json()["api_key"]
+        assert own_key not in member.get("/admin/keys").text
+        listed_own = member.get("/admin/keys").json()["keys"]
+        assert issued_own.json()["key_id"] in [row["key_id"] for row in listed_own]
         assert member.post(f"/admin/keys/{key_id}/revoke").status_code == 200
         authenticator = Authenticator(store)
         assert await authenticator.authenticate(raw_key) is None

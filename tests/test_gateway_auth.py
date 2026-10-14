@@ -5,6 +5,8 @@ import logging
 import httpx2
 import pytest
 
+from mcp.types import CallToolResult, TextContent
+
 from apps.gateway.app.audit import Auditor
 from apps.gateway.app.auth import Authenticator
 from apps.gateway.app.config import UpstreamConfig
@@ -238,6 +240,42 @@ async def test_execute_tool_rejects_forged_and_revoked_principals() -> None:
     assert registry.calls == []
     assert store.audit_log[-1].actor == "unauthenticated"
     assert issued.key_id not in repr(store.audit_log[-1])
+
+
+@pytest.mark.asyncio
+async def test_audit_write_failure_keeps_the_completed_tool_result(caplog) -> None:
+    """A completed upstream call stays successful when the audit insert fails.
+
+    The gateway does not own the upstream database, so the tool result and the
+    audit row are not one transaction. The failure is logged by exception type
+    and the caller still receives the upstream result.
+    """
+
+    class BrokenAudit(InMemoryStore):
+        async def add_audit(self, *_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("audit insert failed")
+
+    store = BrokenAudit()
+    issued = await store.issue()
+    assert await store.grant(issued.key_id, "utility__convert_units") is True
+    authenticator = Authenticator(store)
+    principal = await authenticator.authenticate(issued.raw_key)
+    assert principal is not None
+
+    class Ready:
+        async def call(self, name: str, arguments: dict) -> CallToolResult:
+            assert name == "utility__convert_units"
+            assert arguments == {}
+            return CallToolResult(content=[TextContent(type="text", text="converted")], is_error=False)
+
+    dispatcher = ToolDispatcher(Ready(), authenticator, Auditor(store))
+    with caplog.at_level(logging.WARNING, logger="apps.gateway.app.audit"):
+        result = await dispatcher.execute_tool(principal, "utility__convert_units", {})
+    assert result.is_error is False
+    assert result.content[0].text == "converted"
+    assert store.audit_log == []
+    assert "Audit write failed: RuntimeError" in caplog.text
+    assert "audit insert failed" not in caplog.text
 
 
 @pytest.mark.asyncio

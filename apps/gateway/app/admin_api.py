@@ -169,19 +169,20 @@ def register_admin_routes(app: FastAPI, store: object, registry: object, setting
 
     @app.post("/admin/keys")
     async def issue_key(request: Request) -> JSONResponse:
-        actor = await _admin(store, request)
+        actor = await _user(store, request)
         if isinstance(actor, JSONResponse):
             return actor
         body = await _body(request)
-        if body is None or not isinstance(body.get("user_id"), str):
-            return _bad()
+        target_id = _key_owner(actor, body)
+        if isinstance(target_id, JSONResponse):
+            return target_id
         try:
-            issued = await store.issue_for_user(body["user_id"])  # type: ignore[attr-defined]
+            issued = await store.issue_for_user(target_id)  # type: ignore[attr-defined]
         except StoreUnavailable:
             return _bad()
         await _audit_mutation(auditor, actor, "admin:issue_key", issued.key_id)
         return JSONResponse(
-            {"key_id": issued.key_id, "api_key": issued.raw_key, "user_id": body["user_id"]},
+            {"key_id": issued.key_id, "api_key": issued.raw_key, "user_id": target_id},
             status_code=201,
         )
 
@@ -643,6 +644,21 @@ async def _key_list(store: object, user_id: str | None) -> JSONResponse:
     except StoreUnavailable:
         return _unavailable()
     return JSONResponse({"keys": payload})
+
+
+def _key_owner(actor: UserRecord, body: dict | None) -> str | JSONResponse:
+    """Admins name the owner. Members can issue a key only for themselves."""
+    if actor.role == "admin":
+        if body is None or not isinstance(body.get("user_id"), str) or body["user_id"] == "":
+            return _bad()
+        return body["user_id"]
+    if body is not None and "user_id" in body:
+        supplied = body.get("user_id")
+        if not isinstance(supplied, str):
+            return _bad()
+        if supplied != actor.user_id:
+            return JSONResponse(_FORBIDDEN, status_code=403)
+    return actor.user_id
 
 
 async def _owns_key(store: object, user: UserRecord, key_id: str) -> bool:
