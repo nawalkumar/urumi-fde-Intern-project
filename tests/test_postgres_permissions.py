@@ -158,7 +158,20 @@ def _wait_ready(container: str) -> None:
     deadline = time.monotonic() + 40
     while time.monotonic() < deadline:
         ready = subprocess.run(
-            ["docker", "exec", container, "pg_isready", "-U", "permtest", "-d", "permtest"],
+            [
+                "docker",
+                "exec",
+                container,
+                "pg_isready",
+                "-h",
+                "127.0.0.1",
+                "-p",
+                "5432",
+                "-U",
+                "permtest",
+                "-d",
+                "permtest",
+            ],
             capture_output=True,
             text=True,
         )
