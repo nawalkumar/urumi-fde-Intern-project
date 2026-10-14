@@ -52,6 +52,39 @@ Admin mutations write a separate success row only after the store accepts the ch
 
 If an upstream create, update, or delete commits and registry refresh then fails, the gateway undoes that write and returns HTTP 503 with `persisted: false`. No audit row is written. If the undo itself fails, the change stays, the running registry is aligned with that change when it can be, and the response is HTTP 500 with `persisted: true`. The audit outcome is `error`.
 
+### External MCP client
+
+An external client uses the gateway MCP URL and one user’s API key. It does not use the dashboard login. The dashboard session is an HttpOnly `urumi_session` cookie for `/admin`. That cookie is not sent to `/mcp`, and the dashboard does not proxy `/mcp`. An API key does not authorize `/admin` mutations.
+
+The MCP URL is `<GATEWAY_URL>/mcp`. For the host process in Local setup, `<GATEWAY_URL>` is `http://127.0.0.1:8000`. Replace `<GATEWAY_URL>`, `<KEY_ID>`, and `<API_KEY_SECRET>` locally. Do not commit the real key.
+
+The issued key is one string, `urk_<KEY_ID>.<API_KEY_SECRET>`. `<KEY_ID>` is 16 hexadecimal characters. The secret is the random suffix after the dot. The gateway stores SHA-256 of the whole string and shows the raw key only when it is issued. A new key has no tool grants.
+
+Send that string on MCP requests:
+
+```http
+Authorization: Bearer urk_<KEY_ID>.<API_KEY_SECRET>
+```
+
+The gateway mounts the MCP Python SDK Streamable HTTP endpoint at `/mcp` with JSON responses and stateless HTTP (`apps/common/http.py`). The tests open it with `mcp.client.streamable_http.streamable_http_client` and the `Authorization` header above (`tests/mcp_session.py`), then call `list_tools` and `call_tool`. That client performs the session setup the SDK requires. This repository does not include a hand-written `initialize` body, and it does not include a configuration file for any other product. Point a Streamable HTTP client at `<GATEWAY_URL>/mcp` and send the Bearer header. Do not treat that as proof that an untested client is compatible. No live external client was exercised for this document.
+
+`list_tools` returns a tool only when both of these are true:
+
+- The key has that exact public name granted. There is no wildcard.
+- The registry is still advertising that name. Disabled upstreams, lists that failed or timed out, and colliding public names are already omitted.
+
+A call checks the grant again. An ungranted name returns the tool error `Permission denied.` A colliding name returns `Duplicate public tool name <name>. Conflicting registration excluded.` A disabled upstream returns `Upstream <id> is disabled.` and is not contacted. Other upstreams stay listed and callable. `woocommerce__create_order` is one such tool when WooCommerce is configured and granted. It creates an unpaid pending order in the WooCommerce MCP process. It is not a completed payment or a storefront checkout.
+
+`GET <GATEWAY_URL>/health` does not use an API key. `{"status":"ok"}` means PostgreSQL answered. HTTP 503 with `{"status":"unavailable"}` means it did not.
+
+Missing, malformed, unknown, wrong-secret, and revoked keys all receive the same HTTP 401 body and do not reach an upstream:
+
+```json
+{"error": "invalid_token", "error_description": "Authentication required."}
+```
+
+The response includes `WWW-Authenticate: Bearer error="invalid_token"`. The body does not say which of those cases failed. If the key store cannot be used, `/mcp` returns HTTP 503 with `{"error":"unavailable","error_description":"Authentication is unavailable."}`. An empty tool list for a live key means nothing granted is currently advertised. Collision diagnostics for an administrator are on `GET /admin/upstreams`, which requires the dashboard session, not the API key.
+
 ## Collision handling
 
 Upstream ids must be unique and must not contain `__`. Two registrations that would publish the same public name are both excluded. Discovery omits that name. A call returns `Duplicate public tool name <name>. Conflicting registration excluded.` The gateway does not pick either copy. The admin upstream screen reads the same diagnostics from `GET /admin/upstreams`. An empty list renders “No diagnostics reported.”
