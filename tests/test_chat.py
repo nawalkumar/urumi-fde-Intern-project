@@ -302,6 +302,81 @@ async def test_failed_write_is_not_called_again(launch_app) -> None:
 
 
 @pytest.mark.asyncio
+async def test_one_prompt_calls_two_upstreams_and_a_disabled_tool_stays_hidden(launch_app) -> None:
+    """One chat turn executes two upstreams, then a disabled upstream disappears."""
+    store = InMemoryStore()
+    user_id, key_id = await _member(store, ["woocommerce__list_orders", "support__search_notes"])
+    calls: list[tuple[str, dict]] = []
+    offered: list[list[str]] = []
+    visible = ["woocommerce__list_orders", "support__search_notes"]
+
+    class TwoUpstream(ScriptProvider):
+        async def complete(self, *, messages, tools):
+            offered.append([str(tool["name"]) for tool in tools])
+            return await super().complete(messages=messages, tools=tools)
+
+    provider = TwoUpstream(
+        [
+            ModelTurn(
+                "",
+                [
+                    ToolCall("woocommerce__list_orders", {"after": "2026-10-14T00:00:00+00:00"}),
+                    ToolCall("support__search_notes", {"query": "shipping"}),
+                ],
+            ),
+            ModelTurn("Order 14 is processing. Shipping takes 3 business days."),
+        ]
+    )
+    app = create_app(Settings(upstreams=[]), store=store, chat_provider=provider)
+    registry = app.state.registry
+
+    async def list_tools_result() -> ListToolsResult:
+        tools = [
+            Tool(name="woocommerce__list_orders", description="List orders", input_schema={"type": "object", "properties": {}}),
+            Tool(name="support__search_notes", description="Search notes", input_schema={"type": "object", "properties": {}}),
+        ]
+        return ListToolsResult(tools=[tool for tool in tools if tool.name in visible])
+
+    async def call(name: str, arguments: dict) -> CallToolResult:
+        calls.append((name, arguments))
+        if name not in visible:
+            return CallToolResult(content=[TextContent(type="text", text=f"Upstream {name.split('__')[0]} is disabled.")], is_error=True)
+        if name == "woocommerce__list_orders":
+            return CallToolResult(content=[TextContent(type="text", text="id=14 status=processing")], is_error=False)
+        return CallToolResult(content=[TextContent(type="text", text="Shipping: Standard shipping takes 3 business days.")], is_error=False)
+
+    registry.list_tools_result = list_tools_result
+    registry.call = call
+    base = launch_app(app)
+    with _client(base) as client:
+        _login(client)
+        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "Summarize today's orders and the shipping note."}]})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["message"] == "Order 14 is processing. Shipping takes 3 business days."
+    assert [item["tool"] for item in body["activity"]] == ["woocommerce__list_orders", "support__search_notes"]
+    assert [item["outcome"] for item in body["activity"]] == ["success", "success"]
+    assert [name for name, _arguments in calls] == ["woocommerce__list_orders", "support__search_notes"]
+    tool_rows = [row for row in store.audit_log if row.tool_name in {"woocommerce__list_orders", "support__search_notes"}]
+    assert {row.tool_name for row in tool_rows} == {"woocommerce__list_orders", "support__search_notes"}
+    assert {row.user_id for row in tool_rows} == {user_id}
+    assert {row.actor for row in tool_rows} == {key_id}
+    assert {row.upstream_id for row in tool_rows} == {"woocommerce", "support"}
+
+    visible.remove("support__search_notes")
+    provider.turns.append(ModelTurn("", [ToolCall("support__search_notes", {"query": "shipping"})]))
+    provider.turns.append(ModelTurn("Only the store answered."))
+    calls.clear()
+    with _client(base) as client:
+        _login(client)
+        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "Check shipping again."}]})
+    assert response.status_code == 200
+    assert offered[-1] == ["woocommerce__list_orders"]
+    assert calls == [("support__search_notes", {"query": "shipping"})]
+    assert response.json()["activity"][0] == {"tool": "support__search_notes", "outcome": "error"}
+
+
+@pytest.mark.asyncio
 async def test_execution_uses_the_key_that_holds_the_grant(launch_app) -> None:
     store = InMemoryStore()
     user = await store.create_user("bea", hash_password("member-password-value"), "member")

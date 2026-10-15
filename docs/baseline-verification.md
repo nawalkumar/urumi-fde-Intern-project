@@ -128,3 +128,19 @@ README, `docs/design.md`, and `docs/threat-model.md` describe this behavior. The
 3. Secret `urumi-dev-chat` is absent, so live chat and a single model prompt that calls two upstreams were not run.
 4. `helm upgrade` and rollback were not executed. The chart README already says they have not been run in a cluster. The image update was `kubectl set image` and `kubectl rollout restart`, not a Helm upgrade.
 5. Git push of this work needs GitHub credentials. `git push` over HTTPS failed with `could not read Username`. `gh` is not installed and no token was present in the environment.
+
+## Continuation — 2026-10-15
+
+Rechecked context `kind-urumi-k8s-dev`. The node `urumi-k8s-dev-control-plane` is Ready at `172.19.0.3`. The test cluster was not modified. The three PVC bindings are unchanged:
+
+- `data-urumi-gateway-db-0` → `pvc-f77b4777-44e3-4c02-9309-a1cf3c1332cf`
+- `data-urumi-store-db-0` → `pvc-4283d20f-494e-4a15-81d4-6f514adf028f`
+- `urumi-wordpress-data` → `pvc-1e0101de-5c7e-4f29-b19c-7a0c25eddbf3`
+
+`urumi-gateway-db-0` and `urumi-store-db-0` are Running. Gateway, dashboard, WordPress, the MCP servers, CoreDNS, and ingress-nginx are not Ready. The host route table has no `10.244` routes, so those pod addresses follow the default route via `172.19.0.1`. Each sandbox from `10.244.0.2` through `10.244.0.14` still has its address on `eth0` inside its network namespace, with an up host `veth`. kindnet's daemon log is an nftables sync loop and does not install those routes. The `ptp` plugin in `10-kindnet.conflist` installs them when a sandbox is created. `10-calico.conflist` sorts first. The Calico CNI log shows failed `CNI DEL` calls and no `CNI ADD` entries. Felix ran one IPv4 route resync at startup and later reconciles IP sets.
+
+A policy-only Calico install is present (`calico-node` DaemonSet desired 1, plus Typha and kube-controllers). It is not a healthy replacement dataplane. Removing it would leave kindnet, which does not enforce NetworkPolicy. Isolation is not met. The manual `/32` route restore was preflighted and has not been applied.
+
+`values-dev.yaml` now records gateway and dashboard tag `baseline-20261014`, matching the images loaded for those Deployments, and probe source `172.19.0.3/32`. Helm lint of `values-dev.yaml` and `values-vps.yaml` returned 0 failed. The VPS render still contains `replace-me` and is not deploy-ready. `tests/test_networkpolicy_intent.py` checks the WooCommerce policy text. `tests/test_chat.py` includes a scripted provider test that one prompt calls WooCommerce and support tools and that a disabled support tool is not offered again. That test does not call a live model. Secret `urumi-dev-chat` is still absent.
+
+Local checks on 2026-10-15: `uv run pytest -q --tb=line` passed (155). Focused chat, policy, admin, and auth tests passed (25). Dashboard `npm test` passed (23) and `npm run build` succeeded. Host port 80 remains the test cluster. Helm upgrade and rollback were not run while pod routes are missing. `GIT_TERMINAL_PROMPT=0 git push origin main` failed with `could not read Username`. No token was read or printed.

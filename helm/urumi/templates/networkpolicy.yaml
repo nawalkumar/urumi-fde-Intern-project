@@ -22,6 +22,7 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | quote }}
+        {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.service.mcpPort }}
@@ -95,6 +96,7 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "urumi.selectorLabels" (list . "gateway") | nindent 14 }}
+        {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.service.mcpPort }}
@@ -157,6 +159,7 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | quote }}
+        {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.dashboard.containerPort }}
@@ -199,6 +202,7 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | quote }}
+        {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.store.wordpress.port }}
@@ -284,6 +288,7 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "urumi.selectorLabels" (list . "wordpress-init") | nindent 14 }}
+        {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.store.mariadb.port }}
@@ -305,6 +310,7 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "urumi.selectorLabels" (list . "gateway") | nindent 14 }}
+        {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.database.port }}

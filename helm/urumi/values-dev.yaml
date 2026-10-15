@@ -1,7 +1,8 @@
 # Local rendering overlay. These sizes are provisional guesses for a laptop
 # or a future local cluster. They are not a measured capacity plan.
 # Images are expected only after a local docker build and a load into the node.
-# These tags are k8s-test so a cluster build does not replace the Compose :local tags.
+# Gateway and dashboard tags match the images loaded into kind-urumi-k8s-dev.
+# The MCP servers still use k8s-test, which is the image those Deployments run.
 # Ingress is rendered for store.local. This file does not install a controller.
 
 imagePullPolicy: IfNotPresent
@@ -9,7 +10,7 @@ imagePullPolicy: IfNotPresent
 gateway:
   image:
     repository: urumi-gateway
-    tag: k8s-test
+    tag: baseline-20261014
   upstreamKeySecret: urumi-dev-gateway-keys
   chatApiSecret: urumi-dev-chat
   resources:
@@ -70,7 +71,14 @@ woocommerce:
 dashboard:
   image:
     repository: urumi-dashboard
-    tag: k8s-test
+    tag: baseline-20261014
+
+networkPolicy:
+  # Kubelet probes come from this node's InternalIP, not from a pod.
+  # Recheck `kubectl get node` before applying. On 2026-10-15 the dev node
+  # was 172.19.0.3. 172.19.0.2 belonged to the other Kind node.
+  probeCIDRs:
+    - 172.19.0.3/32
 
 ingress:
   enabled: true

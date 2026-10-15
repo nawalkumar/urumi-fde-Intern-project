@@ -51,6 +51,13 @@ app.kubernetes.io/component: {{ $component }}
 {{- $name }}
 {{- end }}
 
+{{- define "urumi.probeFrom" -}}
+{{- range .Values.networkPolicy.probeCIDRs }}
+- ipBlock:
+    cidr: {{ . | quote }}
+{{- end }}
+{{- end }}
+
 {{- define "urumi.databaseHost" -}}
 {{- include "urumi.serviceName" (list . "gateway-db") }}
 {{- end }}

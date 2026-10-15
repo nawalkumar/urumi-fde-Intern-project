@@ -318,6 +318,9 @@ networkPolicy:
   enabled: true
   ingressNamespace: ingress-nginx
   allowExternalEgress: true
+  # Kubelet probe sources. These are node addresses, not pod CIDRs.
+  # Leaving this empty does not add an allow rule.
+  probeCIDRs: []
 
 database:
   replicas: 1
