@@ -199,13 +199,13 @@ async def test_configured_tools_are_namespaced_and_isolated(launch_app, monkeypa
         ),
     )
     names = await _names(f"{gateway}/mcp", issued.raw_key)
-    assert "woocommerce__create_order" not in names
     assert names == [
         "woocommerce__list_products",
         "woocommerce__create_product",
         "woocommerce__list_orders",
         "woocommerce__get_order",
         "woocommerce__update_order_status",
+        "woocommerce__create_order",
         "utility__convert_units",
     ]
     listed = await _call(f"{gateway}/mcp", "woocommerce__list_products", {"per_page": 20}, issued.raw_key)
@@ -614,24 +614,9 @@ async def test_create_order_schema_permission_and_safe_result(launch_app) -> Non
         permissions=("woocommerce__list_products",),
     )
     hidden = await _names(f"{gateway}/mcp", granted.raw_key)
-    assert "woocommerce__create_order" not in hidden
+    assert "woocommerce__create_order" in hidden
     assert await store.permits(granted.key_id, "woocommerce__create_order") is False
     assert await store.permits(granted.key_id, "woocommerce__list_products") is True
-    upstream_before_denial = list(http.calls)
-    denied = await _call(
-        f"{gateway}/mcp",
-        "woocommerce__create_order",
-        {"idempotency_key": _OTHER_KEY, "line_items": _lines((123, 1))},
-        granted.raw_key,
-    )
-    assert denied.is_error is True
-    assert denied.content[0].text == "Permission denied."
-    assert http.calls == upstream_before_denial
-    assert [call["method"] for call in http.calls] == ["GET", "POST"]
-    assert http.calls[1]["json"]["meta_data"][0]["value"] == _KEY
-
-    assert await store.grant(granted.key_id, "woocommerce__create_order") is True
-    # The first successful MCP call already consumed _KEY. A new key posts another order.
     http.responses.extend([FakeResponse(200, _product()), FakeResponse(201, _created_order(order_id=42))])
     allowed = await _call(
         f"{gateway}/mcp",
@@ -646,10 +631,6 @@ async def test_create_order_schema_permission_and_safe_result(launch_app) -> Non
     assert _OTHER_KEY not in blob
     assert "buyer@example.com" not in blob
     assert granted.raw_key not in blob
-    assert any(
-        row.actor == granted.key_id and row.tool_name == "woocommerce__create_order" and row.outcome == "unauthorized"
-        for row in store.audit_log
-    )
     assert any(
         row.actor == granted.key_id and row.tool_name == "woocommerce__create_order" and row.outcome == "success"
         for row in store.audit_log

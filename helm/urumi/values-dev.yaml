@@ -10,7 +10,7 @@ imagePullPolicy: IfNotPresent
 gateway:
   image:
     repository: urumi-gateway
-    tag: baseline-20261014
+    tag: chat-20261018
   upstreamKeySecret: urumi-dev-gateway-keys
   chatApiSecret: urumi-dev-chat
   resources:
@@ -71,7 +71,7 @@ woocommerce:
 dashboard:
   image:
     repository: urumi-dashboard
-    tag: baseline-20261014
+    tag: module5-20261018
 
 networkPolicy:
   # Kubelet probes come from this node's InternalIP, not from a pod.

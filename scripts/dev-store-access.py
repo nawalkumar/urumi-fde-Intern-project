@@ -185,11 +185,16 @@ class UrlRewriter:
         port_b = str(proxy_port).encode("ascii")
         encoded_origin = _encoded(self.origin)
         encoded_canonical = _encoded(CANONICAL_ORIGIN)
+        # PHP json_encode escapes slashes, then rawurlencode. The result is
+        # http%3A%5C%2F%5C%2Fstore.local, which the plain percent-encoding rule misses.
+        encoded_escaped_origin = b"http%3A%5C%2F%5C%2F127.0.0.1%3A" + port_b
+        encoded_escaped_canonical = b"http%3A%5C%2F%5C%2Fstore.local"
 
         self._downstream = (
             (re.compile(br"https?://store\.local(?::80(?!\d))?", re.IGNORECASE), origin_b),
             (re.compile(br"https?:\\/\\/store\.local(?::80(?!\d))?", re.IGNORECASE), br"http:\/\/127.0.0.1:" + port_b),
             (re.compile(br"https?%3a(?:%2f){2}store\.local", re.IGNORECASE), encoded_origin),
+            (re.compile(br"https?%3a%5c%2f%5c%2fstore\.local", re.IGNORECASE), encoded_escaped_origin),
             (re.compile(br"//store\.local(?::80(?!\d))?", re.IGNORECASE), b"//127.0.0.1:" + port_b),
             (re.compile(br"http://127\.0\.0\.1(?::80(?!\d))?(?=/|\?|#|$)", re.IGNORECASE), origin_b),
         )
@@ -197,6 +202,7 @@ class UrlRewriter:
             (re.compile(br"https?://127\.0\.0\.1:" + port_b + br"(?!\d)", re.IGNORECASE), canonical_b),
             (re.compile(br"https?:\\/\\/127\.0\.0\.1:" + port_b + br"(?!\d)", re.IGNORECASE), br"http:\/\/store.local"),
             (re.compile(br"https?%3a(?:%2f){2}127\.0\.0\.1%3a" + port_b + br"(?!\d)", re.IGNORECASE), encoded_canonical),
+            (re.compile(br"https?%3a%5c%2f%5c%2f127\.0\.0\.1%3a" + port_b + br"(?!\d)", re.IGNORECASE), encoded_escaped_canonical),
             (re.compile(br"//127\.0\.0\.1:" + port_b + br"(?!\d)", re.IGNORECASE), b"//store.local"),
         )
 
@@ -523,6 +529,22 @@ def self_test() -> None:
     escaped = rewriter.downstream(b'"http:\\/\\/store.local\\/wp-admin\\/"')
     if escaped != b'"http:\\/\\/127.0.0.1:18082\\/wp-admin\\/"':
         raise SystemExit("escaped JSON rewrite mismatch")
+    encoded_settings = (
+        b"var wcSettings = JSON.parse( decodeURIComponent( "
+        b"'%22http%3A%5C%2F%5C%2Fstore.local%5C%2Fcheckout%5C%2F%22' ) );"
+    )
+    encoded_expected = (
+        b"var wcSettings = JSON.parse( decodeURIComponent( "
+        b"'%22http%3A%5C%2F%5C%2F127.0.0.1%3A18082%5C%2Fcheckout%5C%2F%22' ) );"
+    )
+    encoded_rewritten = rewriter.downstream(encoded_settings)
+    if encoded_rewritten != encoded_expected:
+        raise SystemExit("encoded WooCommerce settings rewrite mismatch")
+    if rewriter.upstream(encoded_rewritten) != encoded_settings:
+        raise SystemExit("encoded WooCommerce settings upstream restore mismatch")
+    encoded_https = rewriter.downstream(b"https%3a%5c%2f%5c%2fstore.local%5C%2Fcheckout%5C%2F")
+    if encoded_https != b"http%3A%5C%2F%5C%2F127.0.0.1%3A18082%5C%2Fcheckout%5C%2F":
+        raise SystemExit("encoded https WooCommerce settings rewrite mismatch")
     if rewriter.downstream(b"//store.local/a.js") != b"//127.0.0.1:18082/a.js":
         raise SystemExit("protocol-relative rewrite mismatch")
     if rewriter.downstream(b"http://127.0.0.1/wp-admin/") != b"http://127.0.0.1:18082/wp-admin/":

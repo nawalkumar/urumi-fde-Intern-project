@@ -19,6 +19,7 @@ class ProviderError(Exception):
 class ToolCall:
     name: str
     arguments: object
+    call_id: str = ""
 
 
 @dataclass
@@ -49,7 +50,11 @@ class HttpChatProvider:
             async with httpx2.AsyncClient(timeout=httpx2.Timeout(self._timeout)) as client:
                 response = await client.post(
                     self._url,
-                    headers={"Authorization": f"Bearer {self._api_key}", "Accept": "application/json"},
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "Accept": "application/json",
+                        "User-Agent": "urumi-gateway/1.0",
+                    },
                     json=payload,
                 )
         except Exception as exc:
@@ -100,6 +105,7 @@ def _parse_call(item: object) -> ToolCall | None:
     function = item.get("function")
     if not isinstance(function, dict) or not isinstance(function.get("name"), str):
         return None
+    call_id = item.get("id") if isinstance(item.get("id"), str) else ""
     arguments = function.get("arguments")
     if isinstance(arguments, str):
         import json
@@ -108,4 +114,4 @@ def _parse_call(item: object) -> ToolCall | None:
             arguments = json.loads(arguments)
         except json.JSONDecodeError:
             arguments = None
-    return ToolCall(name=function["name"], arguments=arguments)
+    return ToolCall(name=function["name"], arguments=arguments, call_id=call_id)

@@ -1,6 +1,6 @@
 # Development store access diagnosis
 
-Audit date: 2026-10-13. Scope is local browser access to the WordPress/WooCommerce instance in Kubernetes context `kind-urumi-k8s-dev`, namespace `default`. This document records observations and a proposed fix. No routing fix has been applied.
+Audit date: 2026-10-13. Scope is local browser access to the WordPress/WooCommerce instance in Kubernetes context `kind-urumi-k8s-dev`, namespace `default`. This document records observations and a proposed fix. No routing fix has been applied in this audit. Later notes are elsewhere: `docs/store-access-fix-report.md` records the 2026-10-13 proxy, and `docs/assignment-tracker.md` Module 10 records laptop Ingress on 2026-10-18. This file is not rewritten to match those later results.
 
 The audit started a temporary `kubectl port-forward` to `127.0.0.1:18082` for HTTP checks, then stopped that process. No port-forward is running now. No Helm release, Ingress, Service, Pod, PVC, WordPress option, Docker container, or Windows file was modified.
 

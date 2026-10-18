@@ -121,7 +121,7 @@ async def test_read_only_chat_hides_upstream_text_and_ungranted_tools(launch_app
     assert body["activity"] == [{"tool": "woocommerce__list_orders", "outcome": "success"}]
     assert _SENTINEL not in response.text
     assert calls[0][1]["after"] == "2026-10-11T00:00:00+05:30"
-    assert provider.tools[0] == ["woocommerce__list_orders"]
+    assert provider.tools[0] == ["woocommerce__list_orders", "woocommerce__create_product"]
     tool_row = next(row for row in store.audit_log if row.tool_name == "woocommerce__list_orders")
     chat_row = next(row for row in store.audit_log if row.tool_name == "chat")
     assert tool_row.actor == key_id
@@ -151,23 +151,23 @@ async def test_product_creation_arguments_reach_the_dispatcher(launch_app) -> No
 
 
 @pytest.mark.asyncio
-async def test_denied_tool_is_rechecked_and_attributed(launch_app) -> None:
+async def test_status_permission_is_not_a_chat_tool(launch_app) -> None:
     store = InMemoryStore()
     user_id, key_id = await _member(store, ["woocommerce__list_orders"])
     calls: list[tuple[str, dict]] = []
     provider = ScriptProvider(
-        [ModelTurn("", [ToolCall("woocommerce__create_product", {"name": "Nope", "status": "publish"})]), ModelTurn("I could not do that.")]
+        [ModelTurn("", [ToolCall("gateway__read_status", {})]), ModelTurn("I could not do that.")]
     )
     app = create_app(Settings(upstreams=[]), store=store, chat_provider=provider)
     _install(app, calls)
     base = launch_app(app)
     with _client(base) as client:
         _login(client)
-        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "Create a product."}]})
+        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "Read status."}]})
     assert response.status_code == 200
     assert calls == []
-    assert response.json()["activity"][0] == {"tool": "woocommerce__create_product", "outcome": "denied"}
-    denied = next(row for row in store.audit_log if row.tool_name == "woocommerce__create_product")
+    assert response.json()["activity"][0] == {"tool": "gateway__read_status", "outcome": "denied"}
+    denied = next(row for row in store.audit_log if row.tool_name == "gateway__read_status")
     assert denied.outcome == "unauthorized"
     assert denied.actor == key_id
     assert denied.user_id == user_id

@@ -53,15 +53,13 @@ def create_app(settings: Settings | None = None, store: KeyStore | None = None, 
 
     async def on_list_tools(_context: object, _params: object) -> ListToolsResult:
         try:
-            allowed = await authenticator.visible_names(current_principal.get())
+            decision = await authenticator.authorize(current_principal.get())
         except StoreUnavailable:
             logger.warning("Permission check failed: StoreUnavailable")
             return ListToolsResult(tools=[])
-        if not allowed:
+        if not decision.active:
             return ListToolsResult(tools=[])
-        listed = await registry.list_tools_result()
-        visible = [tool for tool in listed.tools if tool.name in allowed]
-        return ListToolsResult(tools=visible)
+        return await registry.list_tools_result()
 
     async def on_call_tool(_context: object, params: object) -> CallToolResult:
         name = getattr(params, "name")

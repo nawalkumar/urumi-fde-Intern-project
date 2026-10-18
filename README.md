@@ -245,19 +245,33 @@ WooCommerce product and order tools register only when `WOOCOMMERCE_BASE_URL`, `
 
 ## Kubernetes
 
-`helm/urumi/README.md` is the chart guide. `values-dev.yaml` is a local overlay: image tag `k8s-test`, HTTP hosts `store.local`, `gateway.local`, and `dashboard.local`. `values-vps.yaml` is a worksheet of `replace-me` placeholders. It is not a production configuration.
+`helm/urumi/README.md` is the chart guide. `values-dev.yaml` is the local overlay for `kind-urumi-k8s-dev`. Its image tags are gateway `chat-20261018`, dashboard `module5-20261018`, and Support, Utility, and WooCommerce MCP `k8s-test`. HTTP hosts are `store.local`, `gateway.local`, and `dashboard.local`. `networkPolicy.probeCIDRs` is `172.19.0.3/32`, the same address as the current dev node InternalIP. The live NetworkPolicy objects allow `172.19.0.2/32`, which is the other Kind node, and Ingress on that address did not answer. The kubelet probe source was not captured, so the values CIDR is not claimed to be the verified probe source. The values file was not changed. `docs/assignment-tracker.md` Modules 9 and 10 still record `172.19.0.2` as the address used in those notes. `values-vps.yaml` is a worksheet of `replace-me` placeholders. It has not been deployed. It is not a production configuration, and it does not provide TLS or a registry.
 
-The chart does not install an Ingress controller. On the dev Kind cluster, `ingress-nginx` is installed separately and the node is labeled `ingress-ready=true`. The controller listens on port 80 inside the dev node. That port is not published to the WSL host. Host ports 80 and 443 are published by `urumi-k8s-test-control-plane`, and `http://store.local/` on port 80 is reset. `store.local` resolves to `127.0.0.1`.
+The chart does not install an Ingress controller. On the dev Kind cluster, `ingress-nginx` is installed separately and the node is labeled `ingress-ready=true`. The controller listens on port 80 inside the dev node. Docker does not publish that port. Host ports 80 and 443 are published by `urumi-k8s-test-control-plane`, and that node has no listener of its own, so a connection to port 80 used to be reset.
 
-From WSL, the dev Ingress is reachable by sending the host header to the dev node IP:
+`scripts/dev-port80-forward.py` runs in a container that shares the test node's network namespace and forwards TCP port 80 to the dev node Ingress. The Windows hosts file maps all three names to `127.0.0.1`:
 
-```bash
-curl --resolve store.local:80:172.19.0.2 http://store.local/
-curl --resolve dashboard.local:80:172.19.0.2 http://dashboard.local/
-curl --resolve gateway.local:80:172.19.0.2 http://gateway.local/health
+```
+127.0.0.1    store.local
+127.0.0.1    dashboard.local
+127.0.0.1    gateway.local
 ```
 
-Recheck the node address with `kubectl get nodes -o wide` before using it. WordPress `home` and `siteurl` stay `http://store.local`. A browser that opens that name on port 80 still reaches the test cluster, not this Ingress. Changing the Windows hosts file or the host firewall is outside this setup. Evidence is in `docs/baseline-verification.md`.
+A browser on this laptop then opens `http://store.local/`, `http://dashboard.local/`, and `http://gateway.local/health`. WordPress `home` and `siteurl` stay `http://store.local`. Recheck the dev node address with `kubectl get nodes -o wide` before starting the forwarder. The current InternalIP on `kind-urumi-k8s-dev` is `172.19.0.3`. If that address changes, replace the container:
+
+```bash
+docker rm -f urumi-dev-port80
+docker run -d --name urumi-dev-port80 \
+  --restart unless-stopped \
+  --network container:urumi-k8s-test-control-plane \
+  --user root \
+  --entrypoint /app/.venv/bin/python \
+  -v "$PWD/scripts/dev-port80-forward.py:/forward.py:ro" \
+  urumi-gateway:chat-20261018 \
+  /forward.py <dev-node-ip> 80
+```
+
+`docker rm -f urumi-dev-port80` stops the forwarder and leaves both clusters' port publishes unchanged. Direct checks against the dev node still use `curl --resolve <host>:80:<dev-node-ip>`.
 
 The chart does not build images. A node runs only an image that has been built and loaded or pulled. Building `:local` for Compose does not update a cluster tag.
 
@@ -287,9 +301,10 @@ There is no separate production deployment in this repository beyond that VPS wo
 
 - The audit insert is not in the same database transaction as the mutation. A crash after the commit, or a failed audit insert, can leave a committed change without the expected audit row. `Auditor.record` logs the exception type and does not change the HTTP result.
 - Registry refresh compensation undoes the upstream write when it can. It is not a single transaction wrapped around the in-process refresh.
-- Dashboard chat tests mock the model provider. The dev cluster has no `urumi-dev-chat` Secret, so `CHAT_API_KEY` is unset and a live model session was not run.
+- Dashboard chat tests mock the model provider. On `kind-urumi-k8s-dev`, Secret `urumi-dev-chat` was used for live Groq chat on 2026-10-18. That key is not in the repository. Without it, `POST /admin/chat` returns 503. The recorded calls created products 17 and 19 and listed live orders. See `docs/assignment-tracker.md`.
 - Resource requests in the chart are placeholders, not a measured capacity plan.
-- This checkout's tests do not prove that an already running cluster is serving this source.
+- Unit tests do not prove that a running cluster is serving this checkout. The dev-cluster checks that did run are in `docs/assignment-tracker.md`: Calico v3.30.2 enforced NetworkPolicy on `kind-urumi-k8s-dev` (the gateway reached WooCommerce MCP; Support and Utility timed out). That cutover is on the node, not in the Helm chart. A node rebuild can put Kindnet back, and Kindnet does not enforce NetworkPolicy.
+- `values-vps.yaml` is unverified as a deployment. `helm lint` and `helm template` of that file are not a VPS install. No registry, DNS name, TLS certificate, or `helm upgrade` is recorded.
 
 ## Troubleshooting
 
@@ -304,4 +319,4 @@ There is no separate production deployment in this repository beyond that VPS wo
 
 Implemented in this source tree: gateway authentication, grants, namespaced tools, collision exclusion, upstream enablement, admin sessions, audit of successful admin mutations, upstream diagnostics in the dashboard, and compensation when registry refresh fails after an upstream write.
 
-Not claimed: that the latest source is already running in Kubernetes, that `values-vps.yaml` is production-ready, or that a live card checkout exists.
+Recorded on the local Kind cluster, and not a production deploy: Ingress on `store.local`, `dashboard.local`, and `gateway.local`, Calico NetworkPolicy enforcement, and live chat tool calls. Not claimed: that this checkout is what the cluster is running now, that `values-vps.yaml` is production-ready, that TLS or a VPS exists, or that a live card checkout exists.

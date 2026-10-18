@@ -17,8 +17,6 @@ from apps.gateway.app.config import Settings
 from apps.gateway.app.directory import UserRecord
 from apps.gateway.app.dispatch import ToolDispatcher
 from apps.gateway.app.keys import UNAUTHENTICATED, StoreUnavailable, seal_principal
-from apps.gateway.app.permissions import is_tool_permission
-
 logger = logging.getLogger(__name__)
 
 _SYSTEM = (
@@ -113,7 +111,28 @@ class ChatService:
                 activity.append(ToolActivity(call.name if isinstance(call.name, str) else "rejected", outcome))
                 if used:
                     actor = used
-                transcript.append({"role": "user", "content": f"Untrusted tool data for {activity[-1].tool}: {text}"})
+                call_id = call.call_id if isinstance(call.call_id, str) and call.call_id else f"call-{len(activity)}"
+                arguments = call.arguments if isinstance(call.arguments, dict) else {}
+                transcript.append(
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": call_id,
+                                "type": "function",
+                                "function": {"name": activity[-1].tool, "arguments": json.dumps(arguments)},
+                            }
+                        ],
+                    }
+                )
+                transcript.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "content": f"Untrusted tool data for {activity[-1].tool}: {text}",
+                    }
+                )
         await self._record(actor, user, "error")
         return ChatAnswer("The tool-call limit was reached.", activity)
 
@@ -141,19 +160,10 @@ class ChatService:
         return outcome, text, principal_id
 
     async def _visible_tools(self, user: UserRecord) -> list[object]:
-        grants = await self._grants(user)
+        if await self._any_key(user) == UNAUTHENTICATED:
+            return []
         listed = await self._registry.list_tools_result()  # type: ignore[attr-defined]
-        return [tool for tool in listed.tools if getattr(tool, "name", "") in grants]
-
-    async def _grants(self, user: UserRecord) -> set[str]:
-        names: set[str] = set()
-        for row in await self._store.list_key_rows(user.user_id):  # type: ignore[attr-defined]
-            if row.revoked_at is not None or row.user_id != user.user_id:
-                continue
-            for permission in await self._store.list_permissions(row.key_id):  # type: ignore[attr-defined]
-                if is_tool_permission(permission):
-                    names.add(permission)
-        return names
+        return list(listed.tools)
 
     async def _key_for(self, user: UserRecord, tool_name: str) -> str:
         fallback = UNAUTHENTICATED

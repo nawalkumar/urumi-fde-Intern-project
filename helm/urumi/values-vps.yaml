@@ -1,9 +1,23 @@
 # NOT A PRODUCTION CONFIGURATION.
 # Helm can render this file. That does not mean it is safe to install.
-# Replace every replace-me value, the image locations, the storage class,
-# and the resource numbers after measuring a real node. Hosts, image names,
-# storage classes, and Secret names below are placeholders. They are not real
-# credentials, registries, or certificates.
+# Copy it to helm/urumi/values-vps.local.yaml, which is gitignored, and
+# replace every placeholder there. Do not commit that copy. Do not put
+# passwords, API keys, or certificate material in either file.
+#
+# Still required from the operator, because this checkout does not have them:
+# - A registry and tag for urumi-gateway, urumi-dashboard, and the three MCP images.
+# - DNS names for the store, gateway, and dashboard. store.publicUrl must be https:// plus the store host.
+# - A TLS Secret of type kubernetes.io/tls. This chart does not create the certificate.
+# - The ingress class and the controller namespace. k3s Traefik uses class traefik and namespace kube-system. Another cluster may use nginx and ingress-nginx.
+# - A StorageClass name that exists on that cluster. Empty uses the cluster default.
+# - networkPolicy.probeCIDRs set to that node's InternalIP after the node exists. The inherited default is empty, so an enforcing CNI would block kubelet probes.
+# - Existing Secrets, created with kubectl, named by the fields below:
+#   database: POSTGRES_PASSWORD and GATEWAY_DATABASE_URL
+#   store: MARIADB_ROOT_PASSWORD, MARIADB_PASSWORD, WORDPRESS_DB_PASSWORD (same as MARIADB_PASSWORD), WORDPRESS_ADMIN_USER, WORDPRESS_ADMIN_PASSWORD, WORDPRESS_ADMIN_EMAIL
+#   gateway.upstreamKeySecret: GATEWAY_UPSTREAM_KEY
+#   gateway.chatApiSecret: CHAT_API_KEY, and optionally CHAT_API_URL and CHAT_MODEL
+#   woocommerce.existingSecret: WOOCOMMERCE_CONSUMER_KEY and WOOCOMMERCE_CONSUMER_SECRET
+# Public mariadb:11.4, wordpress:6.8-php8.2-apache, wordpress:cli-php8.2, and postgres:16-alpine are the chart defaults. Resource numbers are unmeasured.
 
 imagePullPolicy: IfNotPresent
 

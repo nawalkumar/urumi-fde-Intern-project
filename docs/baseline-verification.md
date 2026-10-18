@@ -2,7 +2,7 @@
 
 Checked on 2026-10-14 against context `kind-urumi-k8s-dev`, namespace `default`, Helm release `urumi` revision 1. The test cluster `kind-urumi-k8s-test` was not modified. Compose containers were left stopped.
 
-This file keeps failed and blocked checks. A later pass does not erase them.
+This file keeps failed and blocked checks. A later pass does not erase them. Checks after 2026-10-16, including Calico enforcement, live chat, and laptop Ingress, are in `docs/assignment-tracker.md`. Statements below about an absent chat Secret or kindnet not enforcing NetworkPolicy are the record for the date in that section.
 
 ## Commands
 
@@ -160,3 +160,7 @@ On 2026-10-16 the live DaemonSet still has no `FELIX_ROUTESYNCDISABLED`. Stage 1
 Stage 1 was applied on 2026-10-16 at 08:20 UTC on context `kind-urumi-k8s-dev` only. The command was `kubectl set env daemonset/calico-node -n kube-system -c calico-node FELIX_ROUTESYNCDISABLED=true`. The DaemonSet became Ready in about 20 seconds, inside the 180-second limit. The node stayed Ready. The three PVC volume IDs were unchanged: `pvc-f77b4777-44e3-4c02-9309-a1cf3c1332cf`, `pvc-4283d20f-494e-4a15-81d4-6f514adf028f`, and `pvc-1e0101de-5c7e-4f29-b19c-7a0c25eddbf3`. Felix logged `RouteSyncDisabled:true` and `Route management is disabled, using DummyTables.` `FELIX_INTERFACEPREFIX` stayed `veth`, and `CALICO_NETWORKING_BACKEND` stayed `none`.
 
 No test route was added. After the rollout the node had only `lo` and `eth0`, zero entries in `/var/run/netns`, and no `10.244` route, so there was no freshly verified veth mapping. Workload containers, including both database containers, have `finishedAt` `2026-10-16T06:22:23Z` and exit code 255. That is before the 08:20 Felix start. Host-network control-plane pods restarted in that same 06:22 minute and are Running. `10-kindnet.conflist` is timestamped 06:22; `10-calico.conflist` was rewritten at 08:20 by the `install-cni` init container. The approved rollback command was not applied: the approval card for unsetting `FELIX_ROUTESYNCDISABLED` was skipped, so the setting remains `true`. Stages 2–5 were not started. No PVC or application volume was deleted.
+
+## Continuation — 2026-10-18
+
+This section does not replace the rows above. `docs/assignment-tracker.md` records the later dev-cluster checks: Modules 1–10 and 12 have passing notes, Module 11 is still partial, and the WooCommerce admin screen was not reopened. Calico v3.30.2 enforced NetworkPolicy that day. Secret `urumi-dev-chat` was used for Groq and is not in git. A read-only check the same evening found the dev node at `172.19.0.3`, the test node at `172.19.0.2`, Ingress answering on `172.19.0.3`, and live NetworkPolicies allowing `172.19.0.2/32`. `values-dev.yaml` still says `172.19.0.3/32`. The running gateway image was `urumi-gateway:chat-20261018`. The chart README's older sentence that the policies were not applied described the chart text at that time; the live objects exist. `helm upgrade` and a VPS install are still not recorded.

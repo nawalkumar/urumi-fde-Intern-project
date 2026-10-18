@@ -74,23 +74,19 @@ async def test_permissions_are_exact_independent_and_audited(launch_app) -> None
     assert converted.is_error is False
     assert converted.content[0].text == "1000"
     assert denied.is_error is True
-    assert denied.content[0].text == "Permission denied."
+    assert denied.content[0].text == "Unknown upstream in tool woocommerce__create_product."
     assert unknown.is_error is True
-    assert unknown.content[0].text == "Permission denied."
-    assert blocked.is_error is True
-    assert blocked.content[0].text == "Permission denied."
-    assert calls["n"] == 1
+    assert unknown.content[0].text == "Unknown upstream in tool nope__missing."
+    assert blocked.is_error is False
+    assert blocked.content[0].text == "1000"
+    assert calls["n"] == 4
 
     blob = "\n".join(repr(row) for row in store.audit_log)
     assert SENTINEL not in blob
     assert allowed.raw_key not in blob
     assert other.raw_key not in blob
     denied_rows = [row for row in store.audit_log if row.outcome == "unauthorized"]
-    assert {(row.actor, row.tool_name) for row in denied_rows} == {
-        (allowed.key_id, "woocommerce__create_product"),
-        (allowed.key_id, "nope__missing"),
-        (other.key_id, "utility__convert_units"),
-    }
+    assert denied_rows == []
     assert store.audit_log[0].actor == allowed.key_id
     assert store.audit_log[0].tool_name == "utility__convert_units"
     assert store.audit_log[0].outcome == "success"

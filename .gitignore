@@ -10,10 +10,12 @@ htmlcov/
 .env
 .env.*
 !.env.example
+.cursor/mcp.json
 dashboard/node_modules/
 dashboard/dist/
 dashboard/coverage/
 helm/urumi/values-local.yaml
+helm/urumi/values-vps.local.yaml
 helm/urumi/*-secrets.yaml
 *.log
 *.pem

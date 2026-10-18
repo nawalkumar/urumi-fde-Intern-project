@@ -1,6 +1,6 @@
 # Development store access fix
 
-Implemented on 2026-10-13. The development WordPress Service is reachable in a browser at:
+Implemented on 2026-10-13. This report is that day's proxy. It does not describe the 2026-10-18 Ingress path in `docs/assignment-tracker.md` Module 10. The development WordPress Service was reachable in a browser at:
 
 **http://127.0.0.1:18083/wp-login.php**
 

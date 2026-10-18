@@ -21,6 +21,16 @@ type UpstreamRow = {
   tools: string[];
 };
 
+function serverStatus(row: UpstreamRow): "Connected" | "Unreachable" | "Disabled" {
+  if (!row.enabled || row.listing_state === "disabled") {
+    return "Disabled";
+  }
+  if (row.listing_state === "listing_ok") {
+    return "Connected";
+  }
+  return "Unreachable";
+}
+
 type DiagnosticRow = {
   code: string;
   message: string;
@@ -243,7 +253,7 @@ function UpstreamManager({ onNotice }: { onNotice: (message: string) => void }) 
                 )}
               </td>
               <td>
-                {row.enabled ? "enabled" : "disabled"} / {row.listing_state ?? "unknown"}
+                {serverStatus(row)}
                 {row.has_credential ? " / credential stored" : ""}
               </td>
               <td>{row.tools.join(", ") || "none registered"}</td>

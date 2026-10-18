@@ -90,6 +90,18 @@ spec:
                   name: {{ .Values.gateway.chatApiSecret }}
                   key: {{ .Values.gateway.chatApiSecretKey }}
                   optional: true
+            - name: CHAT_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gateway.chatApiSecret }}
+                  key: CHAT_API_URL
+                  optional: true
+            - name: CHAT_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gateway.chatApiSecret }}
+                  key: CHAT_MODEL
+                  optional: true
             {{- end }}
             {{- if .Values.gateway.upstreamKeySecret }}
             - name: GATEWAY_UPSTREAM_KEY
