@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { adminRequest, errorText } from "./adminClient";
 
 type Activity = { tool: string; outcome: string };
-type Turn = { role: "user" | "assistant"; content: string; activity: Activity[] };
+type Turn = { role: "user" | "assistant"; content: string; activity: Activity[]; partial?: boolean };
 
 const HISTORY_LIMIT = 12;
 
@@ -27,7 +27,7 @@ export function ChatPanel() {
       return;
     }
     const activity = Array.isArray(body.activity) ? body.activity.filter(isActivity) : [];
-    const assistant: Turn = { role: "assistant", content: body.message, activity };
+    const assistant: Turn = { role: "assistant", content: body.message, activity, partial: body.partial === true };
     setTurns([...history, assistant].slice(-HISTORY_LIMIT));
   }
 
@@ -51,6 +51,11 @@ export function ChatPanel() {
         {turns.map((turn, index) => (
           <li key={`${turn.role}-${index}`}>
             <strong>{turn.role === "user" ? "You" : "Assistant"}</strong>
+            {turn.partial ? (
+              <p role="alert">
+                <strong>PARTIAL RESULT.</strong> The tool activity may have completed, but the assistant&apos;s answer is incomplete.
+              </p>
+            ) : null}
             <p>{turn.content}</p>
             {turn.activity.length > 0 ? (
               <ul>
@@ -86,7 +91,7 @@ export function ChatPanel() {
   );
 }
 
-function isChatBody(value: unknown): value is { message: string; activity?: unknown } {
+function isChatBody(value: unknown): value is { message: string; activity?: unknown; partial?: unknown } {
   if (!value || typeof value !== "object" || !("message" in value)) {
     return false;
   }

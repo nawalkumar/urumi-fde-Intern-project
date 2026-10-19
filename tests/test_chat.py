@@ -121,7 +121,7 @@ async def test_read_only_chat_hides_upstream_text_and_ungranted_tools(launch_app
     assert body["activity"] == [{"tool": "woocommerce__list_orders", "outcome": "success"}]
     assert _SENTINEL not in response.text
     assert calls[0][1]["after"] == "2026-10-11T00:00:00+05:30"
-    assert provider.tools[0] == ["woocommerce__list_orders", "woocommerce__create_product"]
+    assert provider.tools[0] == ["woocommerce__list_orders"]
     tool_row = next(row for row in store.audit_log if row.tool_name == "woocommerce__list_orders")
     chat_row = next(row for row in store.audit_log if row.tool_name == "chat")
     assert tool_row.actor == key_id
@@ -171,6 +171,36 @@ async def test_status_permission_is_not_a_chat_tool(launch_app) -> None:
     assert denied.outcome == "unauthorized"
     assert denied.actor == key_id
     assert denied.user_id == user_id
+
+
+@pytest.mark.asyncio
+async def test_chat_without_grants_explains_that_no_tools_are_available(launch_app) -> None:
+    store = InMemoryStore()
+    user_id, key_id = await _member(store, [])
+    provider = ScriptProvider([ModelTurn("should not run")])
+    base = launch_app(create_app(Settings(upstreams=[]), store=store, chat_provider=provider))
+    with _client(base) as client:
+        _login(client)
+        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "List the latest orders."}]})
+    assert response.status_code == 403
+    assert response.json()["error_description"] == "No tools are granted to your API keys, so chat cannot call the store."
+    assert provider.tools == []
+    denied = next(row for row in store.audit_log if row.tool_name == "chat")
+    assert denied.outcome == "unauthorized"
+    assert denied.actor == key_id
+    assert denied.user_id == user_id
+
+    other = InMemoryStore()
+    await other.create_user("cara", hash_password("member-password-value"), "member")
+    provider = ScriptProvider([ModelTurn("should not run")])
+    base = launch_app(create_app(Settings(upstreams=[]), store=other, chat_provider=provider))
+    with _client(base) as client:
+        logged_in = client.post("/admin/login", json={"username": "cara", "password": "member-password-value"})
+        assert logged_in.status_code == 200
+        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "List the latest orders."}]})
+    assert response.status_code == 403
+    assert response.json()["error_description"] == "This account has no API key, so chat cannot call any tool."
+    assert provider.tools == []
 
 
 @pytest.mark.asyncio
@@ -399,3 +429,73 @@ async def test_execution_uses_the_key_that_holds_the_grant(launch_app) -> None:
     assert row.actor == granted.key_id
     assert row.actor != other.key_id
     assert row.user_id == user.user_id
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_before_tool_activity_stays_a_gateway_error(launch_app) -> None:
+    store = InMemoryStore()
+    await _member(store, ["woocommerce__list_orders"])
+    calls: list[tuple[str, dict]] = []
+    provider = ScriptProvider([ProviderError("hidden provider body")])
+    app = create_app(Settings(upstreams=[]), store=store, chat_provider=provider)
+    _install(app, calls)
+    base = launch_app(app)
+    with _client(base) as client:
+        _login(client)
+        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "List orders."}]})
+    assert response.status_code == 502
+    body = response.json()
+    assert body["error_description"] == "The chat provider could not answer."
+    assert body["activity"] == []
+    assert "partial" not in body
+    assert "hidden provider body" not in response.text
+    assert calls == []
+    chat_row = next(row for row in store.audit_log if row.tool_name == "chat")
+    assert chat_row.outcome == "error"
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_after_tool_activity_is_a_partial_result(launch_app) -> None:
+    store = InMemoryStore()
+    await _member(store, ["woocommerce__list_orders"])
+    calls: list[tuple[str, dict]] = []
+    provider = ScriptProvider(
+        [ModelTurn("", [ToolCall("woocommerce__list_orders", {})]), ProviderError("hidden provider body")]
+    )
+    app = create_app(Settings(upstreams=[]), store=store, chat_provider=provider)
+    _install(app, calls)
+    base = launch_app(app)
+    with _client(base) as client:
+        _login(client)
+        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "List orders."}]})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["partial"] is True
+    assert body["message"] == "Partial result: the chat provider stopped after a tool ran. This is not a completed answer."
+    assert body["activity"] == [{"tool": "woocommerce__list_orders", "outcome": "success"}]
+    assert "hidden provider body" not in response.text
+    assert calls == [("woocommerce__list_orders", {})]
+    chat_row = next(row for row in store.audit_log if row.tool_name == "chat")
+    assert chat_row.outcome == "error"
+
+
+@pytest.mark.asyncio
+async def test_timeout_after_tool_activity_keeps_the_timeout_response(launch_app) -> None:
+    store = InMemoryStore()
+    await _member(store, ["woocommerce__list_orders"])
+    calls: list[tuple[str, dict]] = []
+    provider = ScriptProvider([ModelTurn("", [ToolCall("woocommerce__list_orders", {})]), "wait"])
+    app = create_app(Settings(upstreams=[], chat_provider_timeout_seconds=0.05), store=store, chat_provider=provider)
+    _install(app, calls)
+    base = launch_app(app)
+    with _client(base) as client:
+        _login(client)
+        response = client.post("/admin/chat", json={"messages": [{"role": "user", "content": "List orders."}]})
+    assert response.status_code == 504
+    body = response.json()
+    assert body["error_description"] == "The chat provider timed out."
+    assert body["activity"] == []
+    assert "partial" not in body
+    assert calls == [("woocommerce__list_orders", {})]
+    chat_row = next(row for row in store.audit_log if row.tool_name == "chat")
+    assert chat_row.outcome == "timeout"

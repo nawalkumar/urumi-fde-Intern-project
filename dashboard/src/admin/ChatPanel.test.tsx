@@ -67,6 +67,69 @@ test("a chat API error can be retried", async () => {
   expect(attempts).toBe(2);
 });
 
+test("a partial response shows a warning and keeps the tool activity", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      json(200, {
+        partial: true,
+        message: "Partial result: the chat provider stopped after a tool ran. This is not a completed answer.",
+        activity: [{ tool: "utility__convert_units", outcome: "success" }],
+      }),
+    ),
+  );
+
+  render(<ChatPanel />);
+  await user.type(screen.getByLabelText("Message"), "Convert 1 kg to g");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  const warning = await screen.findByRole("alert");
+  expect(warning).toHaveTextContent("PARTIAL RESULT.");
+  expect(warning).toHaveTextContent("The tool activity may have completed, but the assistant's answer is incomplete.");
+  expect(
+    screen.getByText("Partial result: the chat provider stopped after a tool ran. This is not a completed answer."),
+  ).toBeInTheDocument();
+  expect(screen.getByText("utility__convert_units: success")).toBeInTheDocument();
+  expect(screen.getByText("Assistant")).toBeInTheDocument();
+});
+
+test("a normal answer does not show the partial warning", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json(200, { message: "There is one order.", activity: [] })),
+  );
+
+  render(<ChatPanel />);
+  await user.type(screen.getByLabelText("Message"), "Any orders?");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  expect(await screen.findByText("There is one order.")).toBeInTheDocument();
+  expect(screen.queryByText("PARTIAL RESULT.")).not.toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+test("partial false is shown as a normal answer", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      json(200, {
+        partial: false,
+        message: "Converted.",
+        activity: [{ tool: "utility__convert_units", outcome: "success" }],
+      }),
+    ),
+  );
+
+  render(<ChatPanel />);
+  await user.type(screen.getByLabelText("Message"), "Convert 1 kg to g");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  expect(await screen.findByText("Converted.")).toBeInTheDocument();
+  expect(screen.getByText("utility__convert_units: success")).toBeInTheDocument();
+  expect(screen.queryByText("PARTIAL RESULT.")).not.toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,

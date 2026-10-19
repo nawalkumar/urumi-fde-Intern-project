@@ -58,16 +58,39 @@ Demo order, with two different users:
 | --- | --- |
 | Store, database, WordPress volumes | Done. Order 16 is cash on delivery, processing, total 19.00. Module 12 added browser order 20. Same three PVCs. |
 | WooCommerce MCP server | Done. Gateway listed the five required tools and `list_products` returned live products. |
-| Gateway, dashboard, ingress | Done. A read-only check on 2026-10-18 reached `store.local`, `dashboard.local`, and `gateway.local/health` with HTTP 200 on the dev node `172.19.0.3`. Modules 9 and 10 still record `172.19.0.2` for their earlier notes. |
-| Team, keys, audit, tool routing | Done. A member key with zero stored grants listed every enabled tool. Utility scaled to 0 left WooCommerce working. |
-| Chat agent against a real model | Done on 2026-10-18 with Groq. Created product 17 and listed orders 16 and 18. The provider key is only in Secret `urumi-dev-chat`. |
+| Gateway, dashboard, ingress | Done. A read-only check on 2026-10-18 reached `store.local`, `dashboard.local`, and `gateway.local/health` with HTTP 200 on the dev node `172.19.0.3`. Modules 9 and 10 still record `172.19.0.2` for their earlier notes. On 2026-10-19 the dev node is `172.19.0.2` and the test node is `172.19.0.3`. |
+| Team, keys, audit, tool routing | Done on 2026-10-18, then tightened. That day’s zero-grant key listed every enabled tool. The running gateway now requires an exact grant. A key with no grant lists nothing and a call returns “Permission denied.” |
+| Chat agent against a real model | Done on 2026-10-18 with live Groq. Created product 17 and listed orders 16 and 18. The provider key is only in Secret `urumi-dev-chat`. The 2026-10-19 partial-response check was a scripted provider inside the new image, not another live Groq chat. |
 | Upstream isolation (NetworkPolicy actually enforced) | Done on 2026-10-18. Calico v3.30.2 is the CNI. The gateway reached WooCommerce MCP; Support and Utility timed out. |
 | Same chart, production-like values | Partial. `values-vps.yaml` still contains `replace-me`. No VPS, registry, DNS, or TLS certificate is available. `helm upgrade` was not run. |
 | Definition-of-done demo with two users | Done on 2026-10-18 for the recorded sitting. Users `raj_dev` and `naval_dev`, gateway `http://gateway.local`, order 20. The WooCommerce admin screen was not reopened; order 20 was verified in `wp_wc_orders`. |
 
 Live check on 2026-10-18 after the network repair: gateway, dashboard, WordPress, both databases, all three MCP servers, and ingress-nginx were Ready. PVC volume IDs were unchanged: `pvc-f77b4777-44e3-4c02-9309-a1cf3c1332cf`, `pvc-4283d20f-494e-4a15-81d4-6f514adf028f`, `pvc-1e0101de-5c7e-4f29-b19c-7a0c25eddbf3`.
 
-`helm/urumi/values-dev.yaml` sets `networkPolicy.probeCIDRs` to `172.19.0.3/32`. A read-only `kubectl get nodes` showed the dev node InternalIP `172.19.0.3`. Docker shows the other Kind node, `urumi-k8s-test-control-plane`, at `172.19.0.2`. The same read-only curl reached the three hosts on `172.19.0.3` and did not get an HTTP response from `172.19.0.2`. The live NetworkPolicy objects in `default` allow `172.19.0.2/32`, not the values-file CIDR. No packet capture has shown the kubelet probe source, so this file does not call either CIDR verified as the probe source. The values file was not changed. Modules 9 and 10 keep the `172.19.0.2` addresses they recorded.
+On 2026-10-18 a read-only `kubectl get nodes` showed the dev node InternalIP `172.19.0.3` and `urumi-k8s-test-control-plane` at `172.19.0.2`. Curl that evening reached the three hosts on `172.19.0.3` and did not get an HTTP response from `172.19.0.2`.
+
+On 2026-10-19 those addresses are reversed. `kind-urumi-k8s-dev` is `172.19.0.2`. `kind-urumi-k8s-test` is `172.19.0.3`. Container `urumi-dev-port80` shares the test node's network namespace and forwards port 80 to `172.19.0.2`. Store, dashboard, and gateway `/health` returned HTTP 200 on the dev node. `helm/urumi/values-dev.yaml` still sets `networkPolicy.probeCIDRs` to `172.19.0.3/32`. The live NetworkPolicy objects in `default` allow `172.19.0.2/32`. The kubelet probe source IP has not been captured, so neither CIDR is a verified probe source. The values file was not applied, and `helm upgrade` was not run. Modules 9 and 10 keep the addresses they recorded on 2026-10-18.
+
+## Remaining issues
+
+Status date: 2026-10-19. This list is the audit follow-up. It does not replace the module sections.
+
+| Issue | State | Notes |
+| --- | --- | --- |
+| Current Kind node IPs and laptop access path in README, this tracker, the threat model, and the `values-dev.yaml` comment | Solved in the working tree on 2026-10-19 | Documentation only. Not committed. `probeCIDRs` is still `172.19.0.3/32`. |
+| Values-file CIDR versus live NetworkPolicy CIDR | Remaining | Live policies allow `172.19.0.2/32`. The kubelet probe source is unverified. Do not apply `values-dev.yaml` or run `helm upgrade` until a capture records that source. |
+| `10-kindnet.conflist` present beside the loaded Calico network | Noted on 2026-10-19 | `crictl` showed loaded network `k8s-pod-network` with plugin `calico`. `10-kindnet.conflist` was also on disk. That presence is not proof of a networking fault. No file was moved. |
+| Helm release values versus running image tags | Remaining | Release `urumi` is still revision 1. Its stored tags for gateway and dashboard are `k8s-test`. On 2026-10-19 the running images are `urumi-gateway:partial-20261019` and `urumi-dashboard:partial-20261019`, both Ready 1. `values-dev.yaml` still says gateway `chat-20261018` and `probeCIDRs` `172.19.0.3/32`. Live policies allow `172.19.0.2/32`. Do not `helm upgrade` or `helm rollback` that file. Rollback images kept locally: `urumi-gateway:grants-msg-20261019` and `urumi-dashboard:module5-20261018`. |
+| Module 11 VPS worksheet | Remaining | `values-vps.yaml` still contains `replace-me`. No VPS, registry, DNS, or TLS Secret is available. |
+| WooCommerce admin screen | Remaining | Order 20 was read from `wp_wc_orders` on 2026-10-18. The admin screen was not opened. |
+| Audit column labels in the browser | Remaining | The dashboard code renders When, Actor, User, Upstream, Tool, Target, Duration, and Outcome. The screen was not reopened. |
+| ChatPanel screenshot | Remaining | No screenshot is saved. On 2026-10-19 the served bundle `index-DienbTDh.js` was driven with a partial chat body and rendered the text PARTIAL RESULT, the incomplete-answer warning, the partial message, and `utility__convert_units: success`. |
+| Browser add, edit, remove, and invite | Remaining | Module 5 records these as not retested after Module 1. |
+| Gateway `/health` and the three PVCs | Checked on 2026-10-19 | After the `partial-20261019` rollout, gateway `/health` returned `{"status":"ok"}` and both deployments were Ready 1. PVCs stayed Bound: `data-urumi-gateway-db-0` `pvc-f77b4777-44e3-4c02-9309-a1cf3c1332cf`, `data-urumi-store-db-0` `pvc-4283d20f-494e-4a15-81d4-6f514adf028f`, `urumi-wordpress-data` `pvc-1e0101de-5c7e-4f29-b19c-7a0c25eddbf3`. |
+| Permission denial after the partial rollout | Checked on 2026-10-19 | Key `234da3e5fdf24b16`, granted only `utility__convert_units`, called `woocommerce__list_orders`. The gateway returned “Permission denied.” The audit row was `unauthorized` with no upstream. No grant was changed. |
+| Partial chat response | Checked on 2026-10-19, scripted only | This was not a live Groq chat. Inside the running gateway image, a scripted provider failure after `utility__convert_units` returned HTTP 200 with `partial: true`, the partial message, the tool activity, and audit outcome `error`. A failure before any tool stayed HTTP 502 with audit `error`. A timeout after a tool stayed HTTP 504 with audit `timeout`. The script used an in-memory store. The served dashboard bundle rendered PARTIAL RESULT for that body. No Groq request was made, and no WooCommerce or PostgreSQL row was written. |
+| MCP health versus tool execution | Checked on 2026-10-19 | From the new gateway pod, Utility, Support, and WooCommerce `GET /health` each returned HTTP 200. That is endpoint reachability. It is not a successful tool call. After the rollout, `woocommerce__list_orders` on the one-grant test key was “Permission denied.” `utility__convert_units` returned “Upstream utility is disabled.” Support was not called. Successful tool execution remains the 2026-10-18 evidence in Modules 3, 4, 7, and 12. |
+| Utility upstream flag | Remaining, not changed | ConfigMap `UTILITY_MCP_ENABLED=true`, but `gateway_upstream_flags` has utility disabled. `merge_upstreams` uses that flag for a static upstream, so a granted `utility__convert_units` call returns “Upstream utility is disabled.” The last audit is `admin:disable_upstream` success for utility at 2026-10-19T12:22:46Z. Utility was not enabled and no grant was changed. Module 4’s recorded pass needs Utility enabled and a successful conversion. That is a separate approval, not part of the `partial-20261019` rollout. |
 
 ---
 
@@ -180,7 +203,7 @@ One MCP endpoint. Listing returns every enabled server’s tools. A call is rout
 
 ## Module 5 — Admin servers, members, and keys
 
-**Status:** Done on 2026-10-18. The admin server table shows Connected, Unreachable, or Disabled. A live key lists and calls every enabled server's tools without a stored grant. Member `raj_dev` key `349aa4c4a4dd9949` had zero grants, listed all eight tools, read order 16, and was revoked. That check recorded images `urumi-gateway:module5-20261018` and `urumi-dashboard:module5-20261018`. A later read-only listing shows the running gateway image is `urumi-gateway:chat-20261018`, which matches `values-dev.yaml`. The dashboard image is still `urumi-dashboard:module5-20261018`. 218 unit tests passed. Image tags were not changed in this reconciliation.
+**Status:** Done on 2026-10-18. The admin server table shows Connected, Unreachable, or Disabled. A live key lists and calls every enabled server's tools without a stored grant. Member `raj_dev` key `349aa4c4a4dd9949` had zero grants, listed all eight tools, read order 16, and was revoked. That check recorded images `urumi-gateway:module5-20261018` and `urumi-dashboard:module5-20261018`. A later read-only listing that day shows the running gateway image was `urumi-gateway:chat-20261018`, which matched `values-dev.yaml` then. The running 2026-10-19 image tags are in the remaining-issues table. 218 unit tests passed. Image tags were not changed in this reconciliation.
 
 **Requirement**
 
@@ -194,7 +217,7 @@ An admin sees each server as Connected, Unreachable, or Disabled, and sees its t
 - WooCommerce, Support, and Utility are environment upstreams from the chart, so they appear without a manual add.
 - The status page maps listing state to Connected / Unreachable / Disabled (`dashboard/src/status.ts` `connectionLabel`). That page asks the operator to paste an API key. It is separate from the admin session.
 - `serverStatus` in `dashboard/src/admin/AdminPanel.tsx` returns Connected, Unreachable, or Disabled. The 2026-10-18 status line says the admin table showed those words.
-- A new key has no stored grants (`apps/gateway/app/permissions.py`). On 2026-10-18 member `raj_dev` key `349aa4c4a4dd9949` had zero grants and listed all eight enabled tools. `ToolDispatcher.execute_tool` does not require a stored grant.
+- A new key has no stored grants (`apps/gateway/app/permissions.py`). `ToolDispatcher.execute_tool` and `tools/list` require an exact stored grant for that key. On 2026-10-18, before that check, member `raj_dev` key `349aa4c4a4dd9949` had zero grants and listed all eight enabled tools.
 
 **Still open**
 
@@ -295,9 +318,9 @@ User B connects with only the gateway URL and their key, sees every enabled serv
 
 ## Module 9 — Only the gateway can reach upstream MCP servers
 
-**Status:** Done on 2026-10-18. Calico v3.30.2 is the loaded CNI (`10-calico.conflist`). Kindnet is held as `10-kindnet.conflist.held-migration`. Felix prefix stayed `cali`. Route sync is on, and the backend is `bird`.
+**Status:** Done on 2026-10-18. That day's recorded result was Calico v3.30.2 as the loaded CNI (`10-calico.conflist`), Kindnet held as `10-kindnet.conflist.held-migration`, Felix prefix `cali`, route sync on, and backend `bird`.
 
-From the gateway pod, `http://urumi-woocommerce-mcp.default.svc.cluster.local:8000/health` returned `{"status":"ok","woocommerce_api":"configured"}`. The same call from Support timed out, and the same call from Utility timed out. The gateway call succeeded again in that window. Orders 16 and 18 were still `processing` at 19.00 and 12.50. Ingress on `172.19.0.2` returned 200 for `store.local` and `dashboard.local`, and 401 for `gateway.local`. The three PVC volume IDs were unchanged. There were no workload `veth` interfaces.
+From the gateway pod, `http://urumi-woocommerce-mcp.default.svc.cluster.local:8000/health` returned `{"status":"ok","woocommerce_api":"configured"}`. The same call from Support timed out, and the same call from Utility timed out. The gateway call succeeded again in that window. Orders 16 and 18 were still `processing` at 19.00 and 12.50. Ingress on `172.19.0.2` returned 200 for `store.local` and `dashboard.local`, and 401 for `gateway.local`. The three PVC volume IDs were unchanged. There were no workload `veth` interfaces. Those addresses belong to this 2026-10-18 check. On 2026-10-19 the dev node InternalIP is `172.19.0.2` and the test node is `172.19.0.3`. A read-only listing that day found `10-kindnet.conflist` on disk beside the loaded Calico network `k8s-pod-network` (plugin `calico`). This file does not say that Kindnet file was held on 2026-10-19. Its presence is not, by itself, evidence of a networking fault. This module does not record a kubelet probe source.
 
 **Requirement**
 
@@ -332,7 +355,7 @@ The WooCommerce MCP server is not reachable from outside the cluster. Only the g
 | `http://gateway.local/` | 401 | 401 |
 | `http://gateway.local/health` | 200 | 200 |
 
-Host port 80 is still published by `urumi-k8s-test-control-plane`. That node was not listening, so the connection was reset. Container `urumi-dev-port80` shares that node's network namespace and forwards TCP port 80 to the dev Ingress. The Docker port publish was not changed. Windows hosts has `127.0.0.1` for `store.local`, `dashboard.local`, and `gateway.local`. The three PVC volume IDs were unchanged. A GUI click-through of checkout and the dashboard was not repeated in this pass.
+Host port 80 is still published by `urumi-k8s-test-control-plane`. That node was not listening, so the connection was reset. Container `urumi-dev-port80` shares that node's network namespace and forwards TCP port 80 to the dev Ingress. The Docker port publish was not changed. Windows hosts has `127.0.0.1` for `store.local`, `dashboard.local`, and `gateway.local`. The three PVC volume IDs were unchanged. A GUI click-through of checkout and the dashboard was not repeated in this pass. The table above is the 2026-10-18 result. It calls `172.19.0.2` the dev node and records HTTP 200 there. The 2026-10-18 evening note in the snapshot calls the dev node `172.19.0.3` and records no HTTP response from `172.19.0.2`. Those two observations conflict, and this file leaves that historical discrepancy unresolved. On 2026-10-19 the dev node is `172.19.0.2`, the test node is `172.19.0.3`, and the same forwarder sends port 80 to `172.19.0.2`. Store, dashboard, and gateway `/health` returned HTTP 200 on that dev node.
 
 **Requirement**
 
@@ -410,6 +433,42 @@ Gateway URL `http://gateway.local`. Users `raj_dev` (`b1a156315c774f5a`) and `na
 Cluster health, the three volume IDs, laptop URLs, and the NetworkPolicy check were verified again in this sitting. Gateway reached WooCommerce MCP. Support and Utility timed out. `http://store.local/` and `http://dashboard.local/` returned 200. `http://gateway.local/` returned 401 and `/health` returned 200.
 
 Record the date, the gateway URL, the two usernames, and the order id. Do not record API keys, the chat provider key, or WooCommerce consumer secrets.
+
+## Rubric audit on 2026-10-19
+
+This audit compares the module “Done when” lines with the evidence that can be repeated on the current cluster. It does not replace the module histories. Utility stays disabled until a separate approval. Helm was not run.
+
+| Class | What it covers |
+| --- | --- |
+| Completed on 2026-10-18 | A live check passed that day. The module text stays Done. Repeating it today may need the Utility flag or a granted key. |
+| Verified again on 2026-10-19 | Rechecked on `urumi-gateway:partial-20261019` and `urumi-dashboard:partial-20261019` without a Helm change. |
+| Partial | Some of the requirement is evidenced, and a named part is not. |
+| Outstanding deployment | A cluster or chart action that is still not done, or that must not be done with the current values. |
+
+**Completed on 2026-10-18.** Modules 1 through 10 and Module 12 have a recorded live pass, except Module 11. The storefront COD checkout, WooCommerce tool calls, three-upstream listing including a successful `utility__convert_units` of 2 km to 2000 m, live Groq product create and order list, external-client revoke, NetworkPolicy, and laptop Ingress URLs are in those modules. Module 12’s two-upstream chat used WooCommerce and Utility together.
+
+**Verified again on 2026-10-19.** Both new deployments are Ready 1. Gateway `/health` returned `{"status":"ok"}`. The three PVC volume IDs are unchanged. Key `234da3e5fdf24b16` has only `utility__convert_units`; `woocommerce__list_orders` returned “Permission denied.” with audit `unauthorized` and no upstream. The partial-response contract was proven with a scripted provider, and the served dashboard bundle rendered PARTIAL RESULT. Rollback images `urumi-gateway:grants-msg-20261019` and `urumi-dashboard:module5-20261018` are still local.
+
+**Partial.** Module 5’s old “lists every enabled server” check passed only before grants were required. The current image denies an ungranted tool. Module 7’s live Groq pass is from 2026-10-18; the new image has no new live Groq transcript. Module 12’s WooCommerce admin screen was a database row, not the admin screen. Chat activity and the audit column labels have not been reopened in the browser. Browser add, edit, remove, and invite were not retested. MCP `/health` HTTP 200 is reachability, not tool success.
+
+**Outstanding deployment.** Module 11: `values-vps.yaml` still contains `replace-me`, and there is no VPS. Helm release `urumi` is revision 1 with stored tags `k8s-test`. `values-dev.yaml` still says gateway `chat-20261018` and probe CIDR `172.19.0.3/32`. The live images are `partial-20261019` and the live policies allow `172.19.0.2/32`. Do not `helm upgrade` or `helm rollback`. Utility is disabled in `gateway_upstream_flags` even though `UTILITY_MCP_ENABLED=true`. Enabling it is a separate change.
+
+**Does the final demo require Utility?** The required flow names Utility as the third upstream. Module 4 is done only when a granted list includes Utility and a stopped Utility server fails clearly while WooCommerce still succeeds. The recorded Module 12 prompt that uses two servers is WooCommerce plus `utility__convert_units`. The rubric does not say the second server must be Utility if Support is enabled and granted. A demo that claims the recorded three-upstream pass, or that repeats that exact prompt, needs Utility enabled and a successful conversion. A demo that claims only WooCommerce plus Support can leave Utility disabled, and must say so. Do not enable Utility as part of the finished image rollout.
+
+## Demo checklist
+
+Say only the line that matches the evidence.
+
+| Show this | Claim that is safe | Do not claim |
+| --- | --- | --- |
+| `kubectl get deploy` gateway and dashboard | Both run `partial-20261019` and are Ready 1. | That Helm revision 1 or `values-dev.yaml` installed those tags. |
+| Gateway `/health` | The gateway process answered `{"status":"ok"}`. | That every upstream tool works. |
+| Three MCP `GET /health` results | Utility, Support, and WooCommerce endpoints answered HTTP 200 on 2026-10-19. | That each server’s tools executed. |
+| One-grant key calls `woocommerce__list_orders` | The current image returns “Permission denied.” and audits `unauthorized` with no upstream. | That a zero-grant key still lists every tool. That was the 2026-10-18 behavior. |
+| Storefront order 20 and products 17 and 19 | Those rows were created on 2026-10-18 through the browser and live Groq chat. | That they were created again after `partial-20261019`. |
+| Dashboard PARTIAL RESULT | The served bundle shows that warning when the body has `partial: true`. The image produced that body with a scripted provider. | That a live Groq failure was caught in the browser. |
+| Utility conversion of 2 km to 2000 m | It succeeded on 2026-10-18 while Utility was enabled. | That it works now. The flag is disabled, and a current call returns “Upstream utility is disabled.” |
+| Helm and the VPS file | The chart exists. The dev release was not upgraded. | A production install, TLS, or a clean `helm upgrade`. |
 
 ## Suggested order
 

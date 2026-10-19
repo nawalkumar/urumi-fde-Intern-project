@@ -73,6 +73,7 @@ async def test_status_distinguishes_listing_success_failure_and_disabled(launch_
     store = InMemoryStore()
     granted = await store.issue()
     assert await store.grant(granted.key_id, "utility__convert_units") is True
+    assert await store.grant(granted.key_id, "flaky__echo") is True
     app = create_app(
         Settings(
             upstreams=[
@@ -238,7 +239,7 @@ async def test_status_requires_a_live_key_and_ignores_tool_grants(launch_app) ->
 
     async with open_mcp(f"{base}/mcp", empty.raw_key) as client:
         hidden = await client.list_tools()
-    assert [tool.name for tool in hidden.tools] == ["utility__convert_units"]
+    assert [tool.name for tool in hidden.tools] == []
     async with open_mcp(f"{base}/mcp", granted.raw_key) as client:
         visible = await client.list_tools()
         called = await client.call_tool(
@@ -392,9 +393,9 @@ async def test_required_status_permission_is_not_a_tool(launch_app) -> None:
             {"value": 1, "from_unit": "km", "to_unit": "m", "note": sentinel},
         )
         blocked_status = await client.call_tool("gateway__read_status", {"note": sentinel})
-    assert [tool.name for tool in listed.tools] == ["utility__convert_units", "gateway__read_status"]
-    assert blocked_tool.is_error is False
-    assert blocked_tool.content[0].text == "1000"
+    assert [tool.name for tool in listed.tools] == []
+    assert blocked_tool.is_error is True
+    assert blocked_tool.content[0].text == "Permission denied."
     assert blocked_status.is_error is True
     assert blocked_status.content[0].text == "Permission denied."
     assert calls == []
@@ -403,5 +404,9 @@ async def test_required_status_permission_is_not_a_tool(launch_app) -> None:
 
     async with open_mcp(f"{base}/mcp", empty.raw_key) as client:
         empty_list = await client.list_tools()
-    assert [tool.name for tool in empty_list.tools] == ["utility__convert_units", "gateway__read_status"]
-    assert any(row.outcome == "success" and row.actor == status_key.key_id for row in store.audit_log)
+    assert [tool.name for tool in empty_list.tools] == []
+    assert any(
+        row.outcome == "unauthorized" and row.actor == status_key.key_id and row.tool_name == "utility__convert_units"
+        for row in store.audit_log
+    )
+    assert not any(row.outcome == "success" and row.actor == status_key.key_id for row in store.audit_log)

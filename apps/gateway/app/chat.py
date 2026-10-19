@@ -17,6 +17,7 @@ from apps.gateway.app.config import Settings
 from apps.gateway.app.directory import UserRecord
 from apps.gateway.app.dispatch import ToolDispatcher
 from apps.gateway.app.keys import UNAUTHENTICATED, StoreUnavailable, seal_principal
+from apps.gateway.app.permissions import is_tool_permission
 logger = logging.getLogger(__name__)
 
 _SYSTEM = (
@@ -30,6 +31,9 @@ _SYSTEM = (
 )
 _WRITE_MARKERS = ("__create_", "__update_", "__delete_")
 _RESULT_LIMIT = 2000
+_NO_KEY = "This account has no API key, so chat cannot call any tool."
+_NO_GRANTS = "No tools are granted to your API keys, so chat cannot call the store."
+_PARTIAL = "Partial result: the chat provider stopped after a tool ran. This is not a completed answer."
 
 
 @dataclass
@@ -43,6 +47,7 @@ class ChatAnswer:
     message: str
     activity: list[ToolActivity] = field(default_factory=list)
     status: int = 200
+    partial: bool = False
 
 
 class ChatService:
@@ -67,9 +72,15 @@ class ChatService:
 
     async def answer(self, user: UserRecord, messages: list[dict[str, str]]) -> ChatAnswer:
         try:
-            visible = await self._visible_tools(user)
+            granted = await self._granted_names(user)
+            visible = await self._visible_tools(user) if granted else []
         except StoreUnavailable:
             return ChatAnswer("Authentication is unavailable.", status=503)
+        actor = await self._any_key(user)
+        if not granted:
+            await self._record(actor, user, "unauthorized")
+            message = _NO_KEY if actor == UNAUTHENTICATED else _NO_GRANTS
+            return ChatAnswer(message, status=403)
         transcript = [{"role": "system", "content": _SYSTEM}, *messages]
         tools = [
             {
@@ -81,7 +92,6 @@ class ChatService:
         ]
         activity: list[ToolActivity] = []
         failed_writes: set[str] = set()
-        actor = await self._any_key(user)
         budget = self._settings.chat_max_tool_calls
         for _ in range(budget + 1):
             try:
@@ -94,6 +104,8 @@ class ChatService:
                 return ChatAnswer("The chat provider timed out.", activity, status=504)
             except ProviderError:
                 await self._record(actor, user, "error")
+                if activity:
+                    return ChatAnswer(_PARTIAL, activity, status=200, partial=True)
                 return ChatAnswer("The chat provider could not answer.", activity, status=502)
             except Exception:
                 logger.warning("Chat provider failed: %s", "Exception")
@@ -159,11 +171,33 @@ class ChatService:
             failed_writes.add(name)
         return outcome, text, principal_id
 
+    async def _granted_names(self, user: UserRecord) -> set[str]:
+        names: set[str] = set()
+        for row in await self._store.list_key_rows(user.user_id):  # type: ignore[attr-defined]
+            if row.revoked_at is not None or row.user_id != user.user_id:
+                continue
+            for name in await self._store.list_permissions(row.key_id):  # type: ignore[attr-defined]
+                if is_tool_permission(name):
+                    names.add(name)
+        return names
+
     async def _visible_tools(self, user: UserRecord) -> list[object]:
-        if await self._any_key(user) == UNAUTHENTICATED:
+        live = [
+            row.key_id
+            for row in await self._store.list_key_rows(user.user_id)  # type: ignore[attr-defined]
+            if row.revoked_at is None and row.user_id == user.user_id
+        ]
+        if not live:
             return []
         listed = await self._registry.list_tools_result()  # type: ignore[attr-defined]
-        return list(listed.tools)
+        visible: list[object] = []
+        for tool in listed.tools:
+            name = getattr(tool, "name", "")
+            for key_id in live:
+                if await self._authenticator.permits(key_id, name):
+                    visible.append(tool)
+                    break
+        return visible
 
     async def _key_for(self, user: UserRecord, tool_name: str) -> str:
         fallback = UNAUTHENTICATED

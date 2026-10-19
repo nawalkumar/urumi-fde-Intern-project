@@ -245,11 +245,11 @@ WooCommerce product and order tools register only when `WOOCOMMERCE_BASE_URL`, `
 
 ## Kubernetes
 
-`helm/urumi/README.md` is the chart guide. `values-dev.yaml` is the local overlay for `kind-urumi-k8s-dev`. Its image tags are gateway `chat-20261018`, dashboard `module5-20261018`, and Support, Utility, and WooCommerce MCP `k8s-test`. HTTP hosts are `store.local`, `gateway.local`, and `dashboard.local`. `networkPolicy.probeCIDRs` is `172.19.0.3/32`, the same address as the current dev node InternalIP. The live NetworkPolicy objects allow `172.19.0.2/32`, which is the other Kind node, and Ingress on that address did not answer. The kubelet probe source was not captured, so the values CIDR is not claimed to be the verified probe source. The values file was not changed. `docs/assignment-tracker.md` Modules 9 and 10 still record `172.19.0.2` as the address used in those notes. `values-vps.yaml` is a worksheet of `replace-me` placeholders. It has not been deployed. It is not a production configuration, and it does not provide TLS or a registry.
+`helm/urumi/README.md` is the chart guide. `values-dev.yaml` is the local overlay for `kind-urumi-k8s-dev`. Its image tags are gateway `chat-20261018`, dashboard `module5-20261018`, and Support, Utility, and WooCommerce MCP `k8s-test`. The gateway actually running on that cluster is `urumi-gateway:grants-msg-20261019`, set with `kubectl set image` on 2026-10-19. Rollback is `urumi-gateway:chat-20261018`. Do not `helm upgrade` with the current `values-dev.yaml`: that tag and `networkPolicy.probeCIDRs` still disagree with the live cluster. The commands are in the chart guide. HTTP hosts are `store.local`, `gateway.local`, and `dashboard.local`. On 2026-10-19 the dev node InternalIP is `172.19.0.2` and the test node InternalIP is `172.19.0.3`. `networkPolicy.probeCIDRs` is still `172.19.0.3/32`. The live NetworkPolicy objects allow `172.19.0.2/32`. Neither CIDR is a verified kubelet probe source, because that source IP has not been captured. The values file was not applied. `docs/assignment-tracker.md` Modules 9 and 10 keep the addresses recorded for those 2026-10-18 checks. `values-vps.yaml` is a worksheet of `replace-me` placeholders. It has not been deployed. It is not a production configuration, and it does not provide TLS or a registry.
 
-The chart does not install an Ingress controller. On the dev Kind cluster, `ingress-nginx` is installed separately and the node is labeled `ingress-ready=true`. The controller listens on port 80 inside the dev node. Docker does not publish that port. Host ports 80 and 443 are published by `urumi-k8s-test-control-plane`, and that node has no listener of its own, so a connection to port 80 used to be reset.
+The chart does not install an Ingress controller. On the dev Kind cluster, `ingress-nginx` is installed separately and the node is labeled `ingress-ready=true`. The controller listens on port 80 inside the dev node. Docker does not publish the dev node's port 80. Host ports 80 and 443 are published by `urumi-k8s-test-control-plane`.
 
-`scripts/dev-port80-forward.py` runs in a container that shares the test node's network namespace and forwards TCP port 80 to the dev node Ingress. The Windows hosts file maps all three names to `127.0.0.1`:
+`scripts/dev-port80-forward.py` runs in container `urumi-dev-port80`, which shares the test node's network namespace and forwards TCP port 80 to the dev node at `172.19.0.2`. The Windows hosts file maps all three names to `127.0.0.1`:
 
 ```
 127.0.0.1    store.local
@@ -257,7 +257,7 @@ The chart does not install an Ingress controller. On the dev Kind cluster, `ingr
 127.0.0.1    gateway.local
 ```
 
-A browser on this laptop then opens `http://store.local/`, `http://dashboard.local/`, and `http://gateway.local/health`. WordPress `home` and `siteurl` stay `http://store.local`. Recheck the dev node address with `kubectl get nodes -o wide` before starting the forwarder. The current InternalIP on `kind-urumi-k8s-dev` is `172.19.0.3`. If that address changes, replace the container:
+A browser on this laptop then opens `http://store.local/`, `http://dashboard.local/`, and `http://gateway.local/health`. On 2026-10-19 those three routes returned HTTP 200 through the dev node and through the forwarder. WordPress `home` and `siteurl` stay `http://store.local`. Recheck the dev node address with `kubectl get nodes -o wide` before replacing the forwarder. The running forwarder already targets `172.19.0.2`. If that address changes, replace the container:
 
 ```bash
 docker rm -f urumi-dev-port80

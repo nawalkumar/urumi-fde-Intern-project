@@ -44,6 +44,7 @@ type KeyRow = {
   key_id: string;
   user_id: string | null;
   revoked: boolean;
+  created_at?: string;
   permissions: string[];
 };
 
@@ -430,6 +431,7 @@ function KeyManager({ actor, onNotice }: { actor: SessionUser; onNotice: (messag
   const [userList, setUserList] = useState<UserList>({ status: "loading" });
   const [userId, setUserId] = useState("");
   const [issued, setIssued] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [grants, setGrants] = useState<Record<string, string>>({});
   const users = userList.status === "ready" ? userList.users : [];
   const selectedUser = users.some((user) => user.user_id === userId);
@@ -474,6 +476,7 @@ function KeyManager({ actor, onNotice }: { actor: SessionUser; onNotice: (messag
       return;
     }
     setIssued(result.body.api_key);
+    setHighlightId(typeof result.body.key_id === "string" ? result.body.key_id : null);
     await load();
   }
 
@@ -509,11 +512,12 @@ function KeyManager({ actor, onNotice }: { actor: SessionUser; onNotice: (messag
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.key_id}>
+          {newestFirst(rows).map((row) => (
+            <tr key={row.key_id} className={row.key_id === highlightId ? "key-row-new" : undefined}>
               <td>
                 {row.key_id}
                 {row.revoked ? " (revoked)" : ""}
+                {row.key_id === highlightId ? " New" : ""}
               </td>
               <td>{keyOwnerLabel(row, users)}</td>
               <td>
@@ -649,6 +653,25 @@ function AuditHistory() {
       </table>
     </section>
   );
+}
+
+function newestFirst(rows: KeyRow[]): KeyRow[] {
+  return [...rows].sort((left, right) => {
+    const leftTime = Date.parse(left.created_at ?? "");
+    const rightTime = Date.parse(right.created_at ?? "");
+    const leftRank = Number.isNaN(leftTime) ? 0 : leftTime;
+    const rightRank = Number.isNaN(rightTime) ? 0 : rightTime;
+    if (leftRank !== rightRank) {
+      return rightRank - leftRank;
+    }
+    if (left.key_id < right.key_id) {
+      return -1;
+    }
+    if (left.key_id > right.key_id) {
+      return 1;
+    }
+    return 0;
+  });
 }
 
 function keyOwnerLabel(row: KeyRow, users: MemberRow[]): string {

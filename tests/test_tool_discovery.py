@@ -1,4 +1,4 @@
-"""tools/list returns every enabled upstream tool for a live key."""
+"""tools/list returns only the exact grants still advertised for that key."""
 
 import pytest
 
@@ -41,13 +41,12 @@ async def test_discovery_follows_each_keys_current_grants(launch_app, caplog) ->
     gateway = launch_app(app)
     url = f"{gateway}/mcp"
 
-    advertised = ["extra__echo", "support__search_notes", "utility__convert_units"]
-    assert sorted(await _names(url, empty_key.raw_key)) == advertised
-    assert sorted(await _names(url, utility_key.raw_key)) == advertised
-    assert sorted(await _names(url, support_key.raw_key)) == advertised
+    assert await _names(url, empty_key.raw_key) == []
+    assert await _names(url, utility_key.raw_key) == ["utility__convert_units"]
+    assert await _names(url, support_key.raw_key) == ["support__search_notes"]
 
     assert await store.revoke_permission(utility_key.key_id, "utility__convert_units") is True
-    assert sorted(await _names(url, utility_key.raw_key)) == advertised
+    assert await _names(url, utility_key.raw_key) == []
 
     assert await store.revoke(support_key.key_id) is True
     failed = False

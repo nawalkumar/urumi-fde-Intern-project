@@ -1,8 +1,12 @@
 # Local rendering overlay. These sizes are provisional guesses for a laptop
 # or a future local cluster. They are not a measured capacity plan.
 # Images are expected only after a local docker build and a load into the node.
-# Gateway and dashboard tags match the images loaded into kind-urumi-k8s-dev.
+# The gateway tag below is not the image running on kind-urumi-k8s-dev.
+# On 2026-10-19 that Deployment was set with kubectl to urumi-gateway:grants-msg-20261019.
+# The dashboard tag still matches urumi-dashboard:module5-20261018.
 # The MCP servers still use k8s-test, which is the image those Deployments run.
+# Do not helm upgrade this file. It would put the gateway back on chat-20261018
+# and set networkPolicy.probeCIDRs to 172.19.0.3/32. Live policies allow 172.19.0.2/32.
 # Ingress is rendered for store.local. This file does not install a controller.
 
 imagePullPolicy: IfNotPresent
@@ -74,9 +78,10 @@ dashboard:
     tag: module5-20261018
 
 networkPolicy:
-  # Kubelet probes come from this node's InternalIP, not from a pod.
-  # Recheck `kubectl get node` before applying. On 2026-10-15 the dev node
-  # was 172.19.0.3. 172.19.0.2 belonged to the other Kind node.
+  # Not a verified kubelet probe source. On 2026-10-19 kind-urumi-k8s-dev
+  # was 172.19.0.2 and kind-urumi-k8s-test was 172.19.0.3. Live policies
+  # allow 172.19.0.2/32. This value stays 172.19.0.3/32. On 2026-10-15
+  # the dev node was 172.19.0.3. Do not apply this file to change the live CIDR.
   probeCIDRs:
     - 172.19.0.3/32
 

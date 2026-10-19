@@ -2,9 +2,9 @@
 
 HTTP clients and the dashboard chat both call execute_tool. The principal
 must be a Principal sealed by Authenticator after the key hash matches.
-A live key may call every enabled upstream tool. Stored grants are not
-required. gateway__read_status is not a tool. There is no second
-execution implementation.
+A live key may call a tool only when that exact public name is stored for
+that key id. A key with no grants is denied. gateway__read_status is not a
+tool. There is no second execution implementation.
 """
 
 import asyncio
@@ -52,6 +52,15 @@ class ToolDispatcher:
             return _auth_error()
 
         if not is_tool_permission(tool):
+            await self._auditor.record(decision.actor, tool, "unauthorized", user_id=decision.user_id)
+            return _error("Permission denied.")
+        try:
+            allowed = await self._authenticator.permits(decision.actor, tool)
+        except StoreUnavailable:
+            logger.warning("Permission check failed: StoreUnavailable")
+            await self._auditor.record(decision.actor, tool, "unauthorized", user_id=decision.user_id)
+            return _auth_error()
+        if not allowed:
             await self._auditor.record(decision.actor, tool, "unauthorized", user_id=decision.user_id)
             return _error("Permission denied.")
 

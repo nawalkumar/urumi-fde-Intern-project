@@ -195,6 +195,7 @@ async def test_configured_tools_are_namespaced_and_isolated(launch_app, monkeypa
             "woocommerce__list_orders",
             "woocommerce__get_order",
             "woocommerce__update_order_status",
+            "woocommerce__create_order",
             "utility__convert_units",
         ),
     )
@@ -614,24 +615,22 @@ async def test_create_order_schema_permission_and_safe_result(launch_app) -> Non
         permissions=("woocommerce__list_products",),
     )
     hidden = await _names(f"{gateway}/mcp", granted.raw_key)
-    assert "woocommerce__create_order" in hidden
+    assert hidden == ["woocommerce__list_products"]
     assert await store.permits(granted.key_id, "woocommerce__create_order") is False
     assert await store.permits(granted.key_id, "woocommerce__list_products") is True
-    http.responses.extend([FakeResponse(200, _product()), FakeResponse(201, _created_order(order_id=42))])
-    allowed = await _call(
+    denied = await _call(
         f"{gateway}/mcp",
         "woocommerce__create_order",
         {"idempotency_key": _OTHER_KEY, "line_items": _lines((123, 2))},
         granted.raw_key,
     )
-    assert allowed.is_error is False
-    assert "id=42" in allowed.content[0].text
-    assert "buyer@example.com" not in allowed.content[0].text
+    assert denied.is_error is True
+    assert denied.content[0].text == "Permission denied."
     blob = "\n".join(repr(row) for row in store.audit_log)
     assert _OTHER_KEY not in blob
     assert "buyer@example.com" not in blob
     assert granted.raw_key not in blob
     assert any(
-        row.actor == granted.key_id and row.tool_name == "woocommerce__create_order" and row.outcome == "success"
+        row.actor == granted.key_id and row.tool_name == "woocommerce__create_order" and row.outcome == "unauthorized"
         for row in store.audit_log
     )

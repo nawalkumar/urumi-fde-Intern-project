@@ -51,6 +51,54 @@ Each Dockerfile uses the repository root as its build context. Both stages use `
 
 The runtime user is `urumi`, UID and GID 10001. Local images can be built from these Dockerfiles. Installing or upgrading the chart is a separate, reviewed step. Do not treat a previous local cluster as updated with later source changes until its image tags are rebuilt and a reviewed upgrade is applied.
 
+## Kind image update on 2026-10-19
+
+Helm release `urumi` on `kind-urumi-k8s-dev` is still revision 1, installed on 2026-10-12. Its stored application tags are `k8s-test`. That cluster was not updated with `helm upgrade`.
+
+After the gateway-only rollout on 2026-10-19 the running images are `urumi-gateway:grants-msg-20261019`, `urumi-dashboard:module5-20261018`, and `k8s-test` for the three MCP servers. The node image id for the gateway is `docker.io/library/import-2026-10-19@sha256:961dbd41d3a39460f02d4da259666e88051e6cd94486f47f621864ead600728f`. `imagePullPolicy` is `IfNotPresent`, so loading a new build requires a new tag. `urumi-gateway:chat-20261018` remains the local rollback image. `urumi-gateway:grants-20261019` is the previous grant-enforcement image and is also still local.
+
+`values-dev.yaml` still sets the gateway tag to `chat-20261018` and `networkPolicy.probeCIDRs` to `172.19.0.3/32`. The live NetworkPolicies allow `172.19.0.2/32`. Do not run `helm upgrade` with that file until the gateway tag and the probe CIDR are reconciled with the cluster you intend to keep. An upgrade from the current file would replace the running gateway image and can change the probe CIDR. PostgreSQL and WooCommerce data are not part of this image update.
+
+From the repository root, a gateway-only image change is:
+
+```bash
+docker build -f apps/gateway/Dockerfile -t urumi-gateway:TAG .
+kind load docker-image urumi-gateway:TAG --name urumi-k8s-dev
+kubectl --context kind-urumi-k8s-dev -n default set image deployment/urumi-gateway gateway=urumi-gateway:TAG
+kubectl --context kind-urumi-k8s-dev -n default rollout status deployment/urumi-gateway
+```
+
+To return to the image from before grant enforcement:
+
+```bash
+kubectl --context kind-urumi-k8s-dev -n default set image deployment/urumi-gateway gateway=urumi-gateway:chat-20261018
+kubectl --context kind-urumi-k8s-dev -n default rollout status deployment/urumi-gateway
+```
+
+Loading a gateway image does not change the dashboard. The newest-key sort in the dashboard source is not in `urumi-dashboard:module5-20261018`.
+
+## Dashboard image update
+
+A dashboard image change is separate from the gateway commands above. The build context is the `dashboard` directory, not the repository root used by `apps/gateway/Dockerfile`. `imagePullPolicy` is `IfNotPresent`, so a new tag is required. On 2026-10-19 the running dashboard image is `urumi-dashboard:module5-20261018`.
+
+From the repository root:
+
+```bash
+docker build -t urumi-dashboard:TAG dashboard
+kind load docker-image urumi-dashboard:TAG --name urumi-k8s-dev
+kubectl --context kind-urumi-k8s-dev -n default set image deployment/urumi-dashboard dashboard=urumi-dashboard:TAG
+kubectl --context kind-urumi-k8s-dev -n default rollout status deployment/urumi-dashboard
+```
+
+Restore the image that is running now:
+
+```bash
+kubectl --context kind-urumi-k8s-dev -n default set image deployment/urumi-dashboard dashboard=urumi-dashboard:module5-20261018
+kubectl --context kind-urumi-k8s-dev -n default rollout status deployment/urumi-dashboard
+```
+
+Do not use `helm upgrade` or `helm rollback` for this update. Helm release `urumi` is still revision 1, `values-dev.yaml` still sets the gateway tag to `chat-20261018`, and `networkPolicy.probeCIDRs` is still `172.19.0.3/32`. The live gateway image is `urumi-gateway:grants-msg-20261019`, and the live NetworkPolicies allow `172.19.0.2/32`. Either Helm command can replace that gateway image and change the probe CIDR.
+
 ## Secrets
 
 Committed values contain no passwords. Choose one path:

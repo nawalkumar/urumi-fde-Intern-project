@@ -71,10 +71,13 @@ def build_chat_service(
 def _public(answer: ChatAnswer) -> dict[str, object]:
     if answer.status != 200:
         return {"error": "unavailable", "error_description": answer.message, "activity": []}
-    return {
+    body: dict[str, object] = {
         "message": answer.message,
         "activity": [{"tool": item.tool, "outcome": item.outcome} for item in answer.activity],
     }
+    if answer.partial:
+        body["partial"] = True
+    return body
 
 
 def _messages(body: object) -> list[dict[str, str]] | None:

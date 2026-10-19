@@ -74,19 +74,24 @@ async def test_permissions_are_exact_independent_and_audited(launch_app) -> None
     assert converted.is_error is False
     assert converted.content[0].text == "1000"
     assert denied.is_error is True
-    assert denied.content[0].text == "Unknown upstream in tool woocommerce__create_product."
+    assert denied.content[0].text == "Permission denied."
     assert unknown.is_error is True
-    assert unknown.content[0].text == "Unknown upstream in tool nope__missing."
-    assert blocked.is_error is False
-    assert blocked.content[0].text == "1000"
-    assert calls["n"] == 4
+    assert unknown.content[0].text == "Permission denied."
+    assert blocked.is_error is True
+    assert blocked.content[0].text == "Permission denied."
+    assert calls["n"] == 1
 
     blob = "\n".join(repr(row) for row in store.audit_log)
     assert SENTINEL not in blob
     assert allowed.raw_key not in blob
     assert other.raw_key not in blob
     denied_rows = [row for row in store.audit_log if row.outcome == "unauthorized"]
-    assert denied_rows == []
+    assert [row.tool_name for row in denied_rows] == [
+        "woocommerce__create_product",
+        "nope__missing",
+        "utility__convert_units",
+    ]
+    assert denied_rows[2].actor == other.key_id
     assert store.audit_log[0].actor == allowed.key_id
     assert store.audit_log[0].tool_name == "utility__convert_units"
     assert store.audit_log[0].outcome == "success"
@@ -143,6 +148,47 @@ async def test_a_permitted_colliding_name_is_not_dispatched(launch_app) -> None:
     assert kept.is_error is False
     assert kept.content[0].text == "kept"
     assert SENTINEL not in "\n".join(repr(row) for row in store.audit_log)
+
+
+@pytest.mark.asyncio
+async def test_aliases_and_a_key_with_no_grants_cannot_call_or_list(launch_app) -> None:
+    utility = launch_app(create_utility())
+    gateway, store, granted = await start_gateway(
+        launch_app,
+        [UpstreamConfig("utility", f"{utility}/mcp", 5)],
+        permissions=("utility__convert_units",),
+    )
+    empty = await store.issue()
+    authenticator = Authenticator(store)
+    dispatcher, _authenticator = _dispatcher(store, Recording())
+    principal = await authenticator.authenticate(granted.raw_key)
+    assert principal is not None
+    for alias in (
+        "utility__CONVERT_UNITS",
+        "convert_units",
+        "utility__utility__convert_units",
+        "utility__*",
+        "utility__convert_units ",
+    ):
+        denied = await dispatcher.execute_tool(principal, alias, {"note": SENTINEL})
+        assert denied.is_error is True
+        assert denied.content[0].text == "Permission denied."
+        assert dispatcher.registry.calls == []
+    assert store.audit_log[-1].outcome == "unauthorized"
+    assert SENTINEL not in repr(store.audit_log[-1])
+
+    async with open_mcp(f"{gateway}/mcp", empty.raw_key) as client:
+        listed = await client.list_tools()
+        blocked = await client.call_tool(
+            "utility__convert_units",
+            {"value": 1, "from_unit": "kg", "to_unit": "g"},
+        )
+    assert [tool.name for tool in listed.tools] == []
+    assert blocked.is_error is True
+    assert blocked.content[0].text == "Permission denied."
+    async with open_mcp(f"{gateway}/mcp", granted.raw_key) as client:
+        visible = await client.list_tools()
+    assert [tool.name for tool in visible.tools] == ["utility__convert_units"]
 
 
 def test_grant_command_without_a_database_prints_no_key(monkeypatch, capsys) -> None:

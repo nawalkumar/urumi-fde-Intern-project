@@ -638,6 +638,7 @@ async def _key_list(store: object, user_id: str | None) -> JSONResponse:
                     "key_id": row.key_id,
                     "user_id": row.user_id,
                     "revoked": row.revoked_at is not None,
+                    "created_at": row.created_at.isoformat() if isinstance(row.created_at, datetime) else "",
                     "permissions": await store.list_permissions(row.key_id),  # type: ignore[attr-defined]
                 }
             )

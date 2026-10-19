@@ -4,11 +4,14 @@ The browser never receives the provider key, the request body, or a provider
 error body. Tests supply their own implementation and do not call this client.
 """
 
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Protocol
 
 import httpx2
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderError(Exception):
@@ -58,13 +61,20 @@ class HttpChatProvider:
                     json=payload,
                 )
         except Exception as exc:
+            logger.warning("Chat provider failed: transport")
             raise ProviderError("The chat provider could not answer.") from exc
-        if response.status_code != 200:
+        status = response.status_code
+        if status != 200:
+            if isinstance(status, int):
+                logger.warning("Chat provider rejected the completion: status=%s", status)
+            else:
+                logger.warning("Chat provider rejected the completion: status=unreadable")
             raise ProviderError("The chat provider could not answer.")
         try:
             body = response.json()
             choice = body["choices"][0]["message"]
         except Exception as exc:
+            logger.warning("Chat provider failed: unreadable")
             raise ProviderError("The chat provider could not answer.") from exc
         message = choice.get("content") if isinstance(choice, dict) else ""
         if not isinstance(message, str):
