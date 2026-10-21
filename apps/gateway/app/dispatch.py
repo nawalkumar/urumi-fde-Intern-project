@@ -19,15 +19,23 @@ from apps.gateway.app.auth import Authenticator
 from apps.gateway.app.keys import UNAUTHENTICATED, StoreUnavailable
 from apps.gateway.app.permissions import is_tool_permission
 from apps.gateway.app.registry import Registry
+from apps.gateway.app.stores.routing import store_call_allowed
 
 logger = logging.getLogger(__name__)
 
 
 class ToolDispatcher:
-    def __init__(self, registry: Registry, authenticator: Authenticator, auditor: Auditor) -> None:
+    def __init__(
+        self,
+        registry: Registry,
+        authenticator: Authenticator,
+        auditor: Auditor,
+        store: object | None = None,
+    ) -> None:
         self.registry = registry
         self._authenticator = authenticator
         self._auditor = auditor
+        self._store = store
 
     async def execute_tool(
         self,
@@ -62,6 +70,15 @@ class ToolDispatcher:
             return _auth_error()
         if not allowed:
             await self._auditor.record(decision.actor, tool, "unauthorized", user_id=decision.user_id)
+            return _error("Permission denied.")
+        if not await store_call_allowed(self._store, tool):
+            await self._auditor.record(
+                decision.actor,
+                tool,
+                "unauthorized",
+                upstream_id=tool.partition("__")[0],
+                user_id=decision.user_id,
+            )
             return _error("Permission denied.")
 
         started = time.perf_counter()

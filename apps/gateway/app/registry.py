@@ -53,6 +53,7 @@ class Registry:
         self._registrations: dict[str, list[Tool]] = {}
         self._list_failed: set[str] = set()
         self._collisions: set[str] = set()
+        self._collision_upstreams: dict[str, list[str]] = {}
         self.diagnostics: list[Diagnostic] = []
 
     def snapshot(self) -> tuple[object, ...]:
@@ -62,16 +63,18 @@ class Registry:
             {name: list(tools) for name, tools in self._registrations.items()},
             set(self._list_failed),
             set(self._collisions),
+            {name: list(owners) for name, owners in self._collision_upstreams.items()},
             list(self.diagnostics),
         )
 
     def restore(self, snapshot: tuple[object, ...]) -> None:
         """Replace the running configuration with a snapshot from this process."""
-        upstreams, registrations, failed, collisions, diagnostics = snapshot
+        upstreams, registrations, failed, collisions, collision_upstreams, diagnostics = snapshot
         self.upstreams = list(upstreams)  # type: ignore[arg-type]
         self._registrations = {name: list(tools) for name, tools in registrations.items()}  # type: ignore[attr-defined]
         self._list_failed = set(failed)  # type: ignore[arg-type]
         self._collisions = set(collisions)  # type: ignore[arg-type]
+        self._collision_upstreams = {name: list(owners) for name, owners in collision_upstreams.items()}  # type: ignore[attr-defined]
         self.diagnostics = list(diagnostics)  # type: ignore[arg-type]
 
     def configure(self, upstreams: list[UpstreamConfig]) -> None:
@@ -153,7 +156,9 @@ class Registry:
 
     def _refresh_derived_state(self) -> None:
         """Replace collisions and diagnostics from the current snapshots and flags."""
-        self._collisions = _colliding_public_names(self._snapshots())
+        snapshots = self._snapshots()
+        self._collisions = _colliding_public_names(snapshots)
+        self._collision_upstreams = _collision_owners(snapshots)
         diagnostics: list[Diagnostic] = []
         for upstream in self.upstreams:
             if upstream.credential_unreadable:
@@ -305,7 +310,21 @@ class Registry:
             "advertised_tool_count": advertised_total,
             "upstreams": upstreams,
             "diagnostics": [_diagnostic_payload(item) for item in self.diagnostics],
+            "collisions": self.collision_records(),
         }
+
+    def collision_records(self) -> list[dict[str, Any]]:
+        """Operator view of excluded public names. No URLs or credentials."""
+        return [
+            {
+                "category": "duplicate_public_name",
+                "tool_name": name,
+                "upstream_ids": list(self._collision_upstreams.get(name, [])),
+                "resolution": "excluded",
+                "affects": ["discovery", "dispatch"],
+            }
+            for name in sorted(self._collisions)
+        ]
 
     def _listing_state(self, upstream: UpstreamConfig) -> str:
         if not upstream.enabled:
@@ -362,6 +381,15 @@ def _duplicate_names(names: Any) -> list[str]:
     for name in names:
         counts[name] = counts.get(name, 0) + 1
     return sorted(name for name, count in counts.items() if count > 1)
+
+
+def _collision_owners(registrations: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Upstream ids that contributed each public name appearing more than once."""
+    owners: dict[str, list[str]] = {}
+    for upstream_id, names in registrations.items():
+        for name in names:
+            owners.setdefault(name, []).append(upstream_id)
+    return {name: sorted(set(ids)) for name, ids in owners.items() if len(ids) > 1}
 
 
 def _colliding_public_names(registrations: dict[str, list[str]]) -> set[str]:

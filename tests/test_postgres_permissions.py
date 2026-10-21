@@ -448,3 +448,54 @@ async def test_cleanup_deletes_only_recorded_keys(postgres_db: DisposableDatabas
     assert await again.get(drop.key_id) is None
     assert await again.list_permissions(drop.key_id) == []
     await again.close()
+
+
+@pytest.mark.asyncio
+async def test_store_grant_revoke_keeps_other_prefixes(postgres_db: DisposableDatabase) -> None:
+    store = await _open(postgres_db)
+    kept = await store.issue()
+    other = await store.issue()
+    postgres_db.remember(kept.key_id)
+    postgres_db.remember(other.key_id)
+    store_id = "0123456789abcdef"
+    near_id = "0123456789abcdee"
+    assert await store.grant(kept.key_id, f"store_{store_id}__list_orders")
+    assert await store.grant(kept.key_id, "utility__convert_units")
+    assert await store.grant(other.key_id, f"store_{near_id}__list_orders")
+    assert await store.revoke_store_grants(store_id) == 1
+    assert await store.list_permissions(kept.key_id) == ["utility__convert_units"]
+    assert await store.list_permissions(other.key_id) == [f"store_{near_id}__list_orders"]
+    await store.close()
+
+
+@pytest.mark.asyncio
+async def test_store_rows_survive_reconnect_and_honor_the_limit(postgres_db: DisposableDatabase) -> None:
+    from apps.gateway.app.config import Settings, StoreProvisionerSettings
+    from apps.gateway.app.registry import Registry
+    from apps.gateway.app.stores.repository import get_store
+    from apps.gateway.app.stores.service import StoreService
+
+    store = await _open(postgres_db)
+    service = StoreService(
+        store,
+        Registry([]),
+        Settings(upstreams=[], stores=StoreProvisionerSettings(enabled=True, max_per_user=1, timeout_seconds=60)),
+        None,
+        autostart=False,
+    )
+    owner = "abc123def4567890"
+    first, kind = await service.create(owner, "North Shop", "idem-north-1")
+    assert kind == "created" and first is not None
+    replay, replay_kind = await service.create(owner, "North Shop", "idem-north-1")
+    assert replay_kind == "replay" and replay is not None and replay.store_id == first.store_id
+    _blocked, blocked_kind = await service.create(owner, "South Shop", "idem-south-1")
+    assert blocked_kind == "limit"
+    await store.close()
+
+    again = await _open(postgres_db)
+    saved = await get_store(again, first.store_id)
+    assert saved is not None
+    assert saved.state == "provisioning"
+    assert saved.namespace == f"st-{first.store_id}"
+    assert saved.url == ""
+    await again.close()

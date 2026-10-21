@@ -15,6 +15,7 @@ This repository is the source tree. A Docker Compose project and a Kubernetes/Ki
 - Dashboard administration: users, roles, API keys, exact grants, upstream registration, collision diagnostics, and audit history.
 - Optional dashboard chat that calls tools only through the same dispatcher, using one of the signed-in user's live keys.
 - WooCommerce product and order tools when the store REST API is configured. `woocommerce__create_order` creates an unpaid pending order in the WooCommerce MCP process. It is not production checkout.
+- Optional multi-store provisioning stays disabled. `storeProvisioner.enabled` and `storeProvisioner.admit` are both false, and the dev values file was not changed. A store row can be saved, but a separate provisioner process applies the Kubernetes objects. The public gateway does not. Helm renders that process only when both flags are true. The admission policy has to be installed and enforced before provisioning is turned on. The provisioner ClusterRole can delete namespaces and is not limited to names `st-<id>`. Creating a store does not grant its tools. See `docs/multi-store.md`.
 
 ## Architecture
 
@@ -85,9 +86,19 @@ Missing, malformed, unknown, wrong-secret, and revoked keys all receive the same
 
 The response includes `WWW-Authenticate: Bearer error="invalid_token"`. The body does not say which of those cases failed. If the key store cannot be used, `/mcp` returns HTTP 503 with `{"error":"unavailable","error_description":"Authentication is unavailable."}`. An empty tool list for a live key means nothing granted is currently advertised. Collision diagnostics for an administrator are on `GET /admin/upstreams`, which requires the dashboard session, not the API key.
 
+## Tool discovery
+
+`tools/list` is grant-filtered. It reads the caller's current exact grants, drops names the registry has excluded, and drops a store tool unless that store is Ready and the saved upstream is enabled at the store's canonical MCP URL. A relevance score is not consulted. `tools/list` has no query field in this MCP SDK, so search is separate.
+
+`POST /discovery/search` takes `{"query": "..."}` and the same Bearer API key as `/mcp`. Send it to the gateway. In the host setup that is `http://127.0.0.1:8000/discovery/search`. The dashboard dev server and the dashboard container proxy `/admin` only, so they do not serve this route. It ranks only tools that key may already list. It does not grant permissions. Matching is lexical: exact public name, then tokens in the name, upstream id, and description. There is no model call. The query is limited to 200 characters and the response to 20 tools. An empty query returns that key's authorized tools in name order, capped at 20. A malformed or over-long query returns HTTP 400 and no tools. If listing fails, the response is HTTP 503 and no tools; it does not fall back to the grant list or the full catalog. The response does not echo the query.
+
+`GET /admin/discovery` and `POST /admin/discovery/search` require an administrator session. They show candidate and advertised counts, exclusion categories, collision records, and a lexical search of the advertised catalog. That search does not grant anything. A member session receives 403. An API key cannot read it.
+
+Discovery is computed on each request. There is no shared cache, so one key's result cannot be reused for another key. The process keeps the last event's counts, a correlation id, the query length, and a short digest. It does not keep the query text, API keys, or upstream URLs.
+
 ## Collision handling
 
-Upstream ids must be unique and must not contain `__`. Two registrations that would publish the same public name are both excluded. Discovery omits that name. A call returns `Duplicate public tool name <name>. Conflicting registration excluded.` The gateway does not pick either copy. The admin upstream screen reads the same diagnostics from `GET /admin/upstreams`. An empty list renders “No diagnostics reported.”
+Upstream ids must be unique and must not contain `__`. Two registrations that would publish the same public name are both excluded. Discovery omits that name. A call returns `Duplicate public tool name <name>. Conflicting registration excluded.` The gateway does not pick either copy. `GET /admin/discovery` adds the upstream ids, the category `duplicate_public_name`, and the resolution `excluded`. The same exclusion is on `GET /admin/upstreams`. An empty list renders “No diagnostics reported.”
 
 ## Administration
 
@@ -95,8 +106,8 @@ Upstream ids must be unique and must not contain `__`. Two registrations that wo
 | --- | --- | --- |
 | Credential | `urk_<key_id>.<secret>` Bearer token | Username and password |
 | Storage | Key hash in PostgreSQL | HttpOnly `urumi_session` cookie |
-| Allows | `POST /mcp` for granted tools | `/admin` routes for that user |
-| Does not allow | Admin mutations | Tool execution by itself |
+| Allows | `POST /mcp` for granted tools, and `POST /discovery/search` on the gateway (port 8000 in the host setup). Search ranks only tools that key may already call. It does not grant permissions. | `/admin` routes for that user |
+| Does not allow | Admin mutations. The dashboard origin proxies `/admin` and does not serve `/discovery/search`. | Tool execution by itself |
 
 An administrator can create members, change roles, disable users, issue and revoke keys, grant and revoke exact permissions, and register, edit, disable, or remove dynamic upstreams. A member can issue, list, and revoke only that member's keys and can read only that member's audit rows. A member cannot issue a key for someone else, grant tools, or manage upstreams. Disabling a user revokes that user's sessions.
 
@@ -245,7 +256,7 @@ WooCommerce product and order tools register only when `WOOCOMMERCE_BASE_URL`, `
 
 ## Kubernetes
 
-`helm/urumi/README.md` is the chart guide. `values-dev.yaml` is the local overlay for `kind-urumi-k8s-dev`. Its image tags are gateway `chat-20261018`, dashboard `module5-20261018`, and Support, Utility, and WooCommerce MCP `k8s-test`. The gateway actually running on that cluster is `urumi-gateway:grants-msg-20261019`, set with `kubectl set image` on 2026-10-19. Rollback is `urumi-gateway:chat-20261018`. Do not `helm upgrade` with the current `values-dev.yaml`: that tag and `networkPolicy.probeCIDRs` still disagree with the live cluster. The commands are in the chart guide. HTTP hosts are `store.local`, `gateway.local`, and `dashboard.local`. On 2026-10-19 the dev node InternalIP is `172.19.0.2` and the test node InternalIP is `172.19.0.3`. `networkPolicy.probeCIDRs` is still `172.19.0.3/32`. The live NetworkPolicy objects allow `172.19.0.2/32`. Neither CIDR is a verified kubelet probe source, because that source IP has not been captured. The values file was not applied. `docs/assignment-tracker.md` Modules 9 and 10 keep the addresses recorded for those 2026-10-18 checks. `values-vps.yaml` is a worksheet of `replace-me` placeholders. It has not been deployed. It is not a production configuration, and it does not provide TLS or a registry.
+`helm/urumi/README.md` is the chart guide. `values-dev.yaml` is the local overlay for `kind-urumi-k8s-dev`. Its image tags are gateway `chat-20261018`, dashboard `module5-20261018`, and Support, Utility, and WooCommerce MCP `k8s-test`. `docs/assignment-tracker.md` records, on 2026-10-19, gateway image `urumi-gateway:partial-20261019` and dashboard image `urumi-dashboard:partial-20261019`. The recorded rollback images are `urumi-gateway:grants-msg-20261019` and `urumi-dashboard:module5-20261018`. Those are recorded historical states, not a verified current cluster inspection, and they are not this checkout. Earlier notes in `helm/urumi/README.md`, `docs/threat-model.md`, and `docs/baseline-verification.md` still name `urumi-gateway:grants-msg-20261019` as the image running earlier that day. The tracker is the later record. Do not `helm upgrade` with the current `values-dev.yaml`: that file's gateway tag and `networkPolicy.probeCIDRs` disagree with the tags and policies recorded in the tracker. The commands are in the chart guide. HTTP hosts are `store.local`, `gateway.local`, and `dashboard.local`. The tracker also records, on 2026-10-19, dev node InternalIP `172.19.0.2`, test node InternalIP `172.19.0.3`, and NetworkPolicy objects that allowed `172.19.0.2/32`. `networkPolicy.probeCIDRs` in `values-dev.yaml` is still `172.19.0.3/32`. Neither CIDR is a verified kubelet probe source, because that source IP has not been captured. The values file was not applied. This paragraph was not checked against the cluster. `docs/assignment-tracker.md` Modules 9 and 10 keep the addresses recorded for those 2026-10-18 checks. `values-vps.yaml` is a worksheet of `replace-me` placeholders. It has not been deployed. It is not a production configuration, and it does not provide TLS or a registry.
 
 The chart does not install an Ingress controller. On the dev Kind cluster, `ingress-nginx` is installed separately and the node is labeled `ingress-ready=true`. The controller listens on port 80 inside the dev node. Docker does not publish the dev node's port 80. Host ports 80 and 443 are published by `urumi-k8s-test-control-plane`.
 
@@ -287,6 +298,8 @@ Do not run `helm install` or `helm upgrade` until image tags, Secrets, storage, 
 
 There is no separate production deployment in this repository beyond that VPS worksheet.
 
+Additional stores are not part of that Helm release. Both provisioner flags stay false. A separate provisioner would apply store objects, and only after the admission policy is installed. That has not been done. `docs/multi-store.md` describes the lifecycle. No store was created on `kind-urumi-k8s-dev`. `scripts/disposable-store-acceptance.sh` has not been executed.
+
 ## Security
 
 - Never commit `.env`, recovery passwords, API keys, database URLs with real passwords, or Helm values that contain Secret data.
@@ -299,19 +312,21 @@ There is no separate production deployment in this repository beyond that VPS wo
 
 ## Limitations
 
+- Discovery search matches tokens in the public name, upstream id, and description. It does not match synonyms, and it was exercised with in-process fakes rather than the dev cluster.
+- Multi-store provisioning stays off. `storeProvisioner.enabled` and `storeProvisioner.admit` are false. Helm renders the provisioner only when both are true. The admission policy is not installed on a cluster. It has to be installed and enforced before provisioning is enabled. RBAC does not limit namespace deletion to `st-<id>`. Store manifest and unit tests check rendered objects and in-process behavior. They do not show runtime cross-store isolation, and they do not prove that NetworkPolicies are enforced. The disposable-cluster acceptance script has not been run. See `docs/multi-store.md`.
 - The audit insert is not in the same database transaction as the mutation. A crash after the commit, or a failed audit insert, can leave a committed change without the expected audit row. `Auditor.record` logs the exception type and does not change the HTTP result.
 - Registry refresh compensation undoes the upstream write when it can. It is not a single transaction wrapped around the in-process refresh.
 - Dashboard chat tests mock the model provider. On `kind-urumi-k8s-dev`, Secret `urumi-dev-chat` was used for live Groq chat on 2026-10-18. That key is not in the repository. Without it, `POST /admin/chat` returns 503. The recorded calls created products 17 and 19 and listed live orders. See `docs/assignment-tracker.md`.
 - Resource requests in the chart are placeholders, not a measured capacity plan.
-- Unit tests do not prove that a running cluster is serving this checkout. The dev-cluster checks that did run are in `docs/assignment-tracker.md`: Calico v3.30.2 enforced NetworkPolicy on `kind-urumi-k8s-dev` (the gateway reached WooCommerce MCP; Support and Utility timed out). That cutover is on the node, not in the Helm chart. A node rebuild can put Kindnet back, and Kindnet does not enforce NetworkPolicy.
-- `values-vps.yaml` is unverified as a deployment. `helm lint` and `helm template` of that file are not a VPS install. No registry, DNS name, TLS certificate, or `helm upgrade` is recorded.
+- Unit tests do not prove that a running cluster is serving this checkout. The dev-cluster checks recorded in `docs/assignment-tracker.md` say Calico v3.30.2 enforced NetworkPolicy on `kind-urumi-k8s-dev` (the gateway reached WooCommerce MCP; Support and Utility timed out). That note is not a new cluster inspection, and it is not what the store manifest tests prove. Those tests render objects. A node rebuild can put Kindnet back, and Kindnet does not enforce NetworkPolicy.
+- `values-vps.yaml` is unverified as a deployment. `helm lint` and `helm template` of that file are not a VPS install. No registry, DNS name, TLS certificate, or `helm upgrade` is recorded. A VPS deployment has not been done.
 
 ## Troubleshooting
 
 - Gateway `/health` returns 503: PostgreSQL is down or `GATEWAY_DATABASE_URL` is wrong. Readiness should fail. Do not use `/health` as a liveness probe that restarts the process for a database outage. The chart uses TCP for gateway liveness and `/health` for readiness.
 - Compose gateway cannot resolve `gateway-db`: the gateway is running on the host. Use a published database port or run the gateway in Compose.
 - WooCommerce tools are missing: the consumer key and secret are empty, or the MCP server was not recreated after `.env` changed.
-- Dashboard admin calls fail in dev: the Vite server must be able to reach `GATEWAY_ORIGIN`. `/mcp` is not proxied.
+- Dashboard admin calls fail in dev: the Vite server must be able to reach `GATEWAY_ORIGIN`. It proxies `/admin` only. `/mcp` and `/discovery/search` are not proxied. Client discovery search goes to the gateway, port 8000 in the host setup.
 - Helm install exceeds five minutes on first database startup: the chart guide uses `--timeout 20m`.
 - `values-vps.yaml` still contains `replace-me`: do not install it.
 

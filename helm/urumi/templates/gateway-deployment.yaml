@@ -13,6 +13,9 @@ spec:
     metadata:
       labels:
         {{- include "urumi.componentLabels" (list . "gateway") | nindent 8 }}
+        {{- if and .Values.storeProvisioner.enabled .Values.storeProvisioner.admit }}
+        urumi.dev/gateway: allowed
+        {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/database-token: {{ .Values.database.rolloutToken | quote }}
@@ -139,6 +142,34 @@ spec:
                 secretKeyRef:
                   name: {{ include "urumi.databaseSecretName" . }}
                   key: {{ .Values.database.secretKeys.conninfo }}
+            {{- if and .Values.storeProvisioner.enabled .Values.storeProvisioner.admit }}
+            - name: STORE_PROVISIONER_ENABLED
+              value: "true"
+            - name: STORE_MAX_PER_USER
+              value: {{ .Values.storeProvisioner.maxPerUser | quote }}
+            - name: STORE_PROVISION_TIMEOUT_SECONDS
+              value: {{ .Values.storeProvisioner.timeoutSeconds | quote }}
+            - name: STORE_PROVISION_CONCURRENCY
+              value: {{ .Values.storeProvisioner.concurrency | quote }}
+            - name: STORE_PROVISION_MAX_ATTEMPTS
+              value: {{ .Values.storeProvisioner.maxAttempts | quote }}
+            - name: STORE_INGRESS_BASE_DOMAIN
+              value: {{ .Values.storeProvisioner.ingressBaseDomain | quote }}
+            - name: STORE_GATEWAY_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: STORE_INGRESS_NAMESPACE
+              value: {{ .Values.storeProvisioner.ingressNamespace | quote }}
+            - name: STORE_ALLOW_PLUGIN_EGRESS
+              value: {{ .Values.storeProvisioner.allowPluginEgress | quote }}
+            - name: STORE_IMAGE_WORDPRESS
+              value: {{ .Values.storeProvisioner.images.wordpress | quote }}
+            - name: STORE_IMAGE_MARIADB
+              value: {{ .Values.storeProvisioner.images.mariadb | quote }}
+            - name: STORE_IMAGE_WORDPRESS_CLI
+              value: {{ .Values.storeProvisioner.images.wordpressCli | quote }}
+            - name: STORE_IMAGE_WOO_MCP
+              value: {{ .Values.storeProvisioner.images.woocommerceMcp | quote }}
+            {{- end }}
           startupProbe:
             {{- include "urumi.httpProbe" .Values.probes.gateway.startup | nindent 12 }}
           livenessProbe:

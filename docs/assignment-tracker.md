@@ -470,6 +470,14 @@ Say only the line that matches the evidence.
 | Utility conversion of 2 km to 2000 m | It succeeded on 2026-10-18 while Utility was enabled. | That it works now. The flag is disabled, and a current call returns “Upstream utility is disabled.” |
 | Helm and the VPS file | The chart exists. The dev release was not upgraded. | A production install, TLS, or a clean `helm upgrade`. |
 
+## Bonus — multiple stores
+
+**Status:** Implemented in this checkout on 2026-10-20. Not runtime-verified. No store was created on `kind-urumi-k8s-dev` or `kind-urumi-k8s-test`. `helm upgrade` was not run. Images were not rebuilt. `values-dev.yaml` was not edited. `storeProvisioner.enabled` remains false.
+
+The design is `docs/multi-store.md`. The dashboard has a Stores section. The gateway stores a row before any cluster call. A separate provisioner process, not the public gateway, would apply `st-<id>` objects. `storeProvisioner.enabled` and `storeProvisioner.admit` stay false, and Helm will not render the provisioner without `admit`. Secret reads are name-limited. Namespace delete still cannot be limited with a ClusterRole, so a ValidatingAdmissionPolicy is the write boundary and has not been enforced on a cluster. Provisioning remains unsafe to enable.
+
+The next check belongs on a new cluster whose context name contains `disposable`. `scripts/disposable-store-acceptance.sh` refuses the existing Kind contexts. It was not executed.
+
 ## Suggested order
 
 1. Module 1, cluster health.

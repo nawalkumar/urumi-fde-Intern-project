@@ -11,7 +11,9 @@ from typing import AsyncIterator
 
 from apps.gateway.app.directory import MemoryAccounts, PostgresAccounts, UnavailableAccounts
 from apps.gateway.app.keys import IssuedKey, KeyRow, StoreUnavailable, generate_key
-from apps.gateway.app.permissions import is_permission_name
+from apps.gateway.app.permissions import is_permission_name, is_tool_permission
+from apps.gateway.app.stores.model import STORE_ID
+from apps.gateway.app.stores.repository import STORE_SCHEMA
 
 SCHEMA = (
     """
@@ -147,6 +149,11 @@ WHERE key_id = %s
 ORDER BY tool_name
 """
 
+DELETE_STORE_GRANTS = """
+DELETE FROM gateway_key_permissions
+WHERE tool_name LIKE %s ESCAPE '\\'
+"""
+
 logger = logging.getLogger(__name__)
 
 
@@ -196,6 +203,8 @@ class InMemoryStore(MemoryAccounts):
         self._sessions: dict[str, object] = {}
         self._upstreams: dict[str, object] = {}
         self._flags: dict[str, bool] = {}
+        self._stores: dict[str, object] = {}
+        self._store_lock: object | None = None
 
     @asynccontextmanager
     async def lifespan(self) -> AsyncIterator[None]:
@@ -269,6 +278,21 @@ class InMemoryStore(MemoryAccounts):
     async def list_permissions(self, key_id: str) -> list[str]:
         return sorted(self._permissions.get(key_id, ()))
 
+    async def revoke_store_grants(self, store_id: str) -> int:
+        prefix = _store_grant_prefix(store_id)
+        if prefix is None:
+            return 0
+        removed = 0
+        upstream_id = prefix[: -len("__")]
+        for names in self._permissions.values():
+            for name in list(names):
+                if not is_tool_permission(name):
+                    continue
+                if name.partition("__")[0] == upstream_id:
+                    names.remove(name)
+                    removed += 1
+        return removed
+
 
 class UnconfiguredStore(UnavailableAccounts):
     """Used when GATEWAY_DATABASE_URL is unset. It never authenticates a caller."""
@@ -319,6 +343,10 @@ class UnconfiguredStore(UnavailableAccounts):
 
     async def list_permissions(self, key_id: str) -> list[str]:
         del key_id
+        raise StoreUnavailable("Gateway key store is not configured.")
+
+    async def revoke_store_grants(self, store_id: str) -> int:
+        del store_id
         raise StoreUnavailable("Gateway key store is not configured.")
 
 
@@ -494,10 +522,22 @@ class PostgresStore(PostgresAccounts):
             raise StoreUnavailable("Gateway database read failed.") from None
         return [row[0] for row in rows]
 
+    async def revoke_store_grants(self, store_id: str) -> int:
+        pattern = _store_grant_like(store_id)
+        if pattern is None:
+            return 0
+        try:
+            async with self._connection() as conn:
+                cursor = await conn.execute(DELETE_STORE_GRANTS, (pattern,))
+        except Exception as exc:
+            logger.warning("Gateway database write failed: %s", type(exc).__name__)
+            raise StoreUnavailable("Gateway database write failed.") from None
+        return int(getattr(cursor, "rowcount", 0) or 0)
+
     async def _ensure_schema(self) -> None:
         try:
             async with self._connection() as conn:
-                for statement in (*SCHEMA, *ADMIN_SCHEMA):
+                for statement in (*SCHEMA, *ADMIN_SCHEMA, *STORE_SCHEMA):
                     await conn.execute(statement)
         except Exception as exc:
             logger.warning("Gateway database setup failed: %s", type(exc).__name__)
@@ -521,3 +561,16 @@ class PostgresStore(PostgresAccounts):
 
 def _is_unique_violation(exc: BaseException) -> bool:
     return type(exc).__name__ == "UniqueViolation"
+
+
+def _store_grant_prefix(store_id: str) -> str | None:
+    if STORE_ID.fullmatch(store_id) is None:
+        return None
+    return f"store_{store_id}__"
+
+
+def _store_grant_like(store_id: str) -> str | None:
+    """LIKE pattern for one store's exact tool names. Underscores are escaped."""
+    if _store_grant_prefix(store_id) is None:
+        return None
+    return "store\\_" + store_id + "\\_\\_%"

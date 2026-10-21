@@ -1,0 +1,122 @@
+{{- if and .Values.storeProvisioner.enabled .Values.storeProvisioner.admit }}
+# Namespace delete stays in this ClusterRole because RBAC cannot limit a
+# ClusterRole to namespaces named st-<id>. store-provisioner-admission.yaml
+# is the independent boundary for that verb and for creates. Do not render
+# this role without that policy. The public gateway does not use this account.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "urumi.serviceName" (list . "store-provisioner") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "store-provisioner") | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "urumi.serviceName" (list . "store-provisioner") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "store-provisioner") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "update"]
+    resourceNames: ["store-db", "woocommerce-credentials"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "update"]
+    resourceNames: ["store-config", "store-init"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "update"]
+    resourceNames: ["store-db", "wordpress", "woo-mcp"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "update"]
+    resourceNames: ["wordpress-data"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "update"]
+    resourceNames: ["store-workload"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["get", "update"]
+    resourceNames: ["store"]
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["limitranges"]
+    verbs: ["get", "update"]
+    resourceNames: ["store"]
+  - apiGroups: [""]
+    resources: ["limitranges"]
+    verbs: ["create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "update"]
+    resourceNames: ["wordpress", "woo-mcp"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "update"]
+    resourceNames: ["store-db"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["create"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "update"]
+    resourceNames: ["wordpress-init"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "update"]
+    resourceNames: ["default-deny", "wordpress", "store-db", "woo-mcp", "wordpress-init"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "update"]
+    resourceNames: ["store"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "urumi.serviceName" (list . "store-provisioner") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "store-provisioner") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "urumi.serviceName" (list . "store-provisioner") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "urumi.serviceName" (list . "store-provisioner") }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

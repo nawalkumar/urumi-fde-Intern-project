@@ -18,6 +18,7 @@ from apps.gateway.app.directory import UserRecord
 from apps.gateway.app.dispatch import ToolDispatcher
 from apps.gateway.app.keys import UNAUTHENTICATED, StoreUnavailable, seal_principal
 from apps.gateway.app.permissions import is_tool_permission
+from apps.gateway.app.stores.routing import store_block_reason
 logger = logging.getLogger(__name__)
 
 _SYSTEM = (
@@ -193,6 +194,8 @@ class ChatService:
         visible: list[object] = []
         for tool in listed.tools:
             name = getattr(tool, "name", "")
+            if await store_block_reason(self._store, name) is not None:
+                continue
             for key_id in live:
                 if await self._authenticator.permits(key_id, name):
                     visible.append(tool)

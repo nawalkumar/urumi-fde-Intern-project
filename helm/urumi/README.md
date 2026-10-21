@@ -260,3 +260,11 @@ helm upgrade --install urumi helm/urumi -f helm/urumi/values-dev.yaml --timeout 
 ```
 
 Use a private values file instead of `values-vps.yaml` until every `replace-me` value has been replaced. This command is not part of the repository's test workflow and was not run to validate this checkout.
+
+## Multi-store provisioner
+
+`storeProvisioner.enabled` and `storeProvisioner.admit` default to false. Helm fails the render when `enabled` is true and `admit` is false. While both are false, this chart does not render a provisioner ServiceAccount, ClusterRole, admission policy, or Deployment, and the gateway ServiceAccount does not change. `values-dev.yaml` does not set the flags. Do not `helm upgrade` the live release to turn them on.
+
+When both are true, the chart renders a separate provisioner Deployment with that ServiceAccount. The public gateway keeps its own account and does not mount the provisioner token. The ClusterRole limits secret get and update to `store-db` and `woocommerce-credentials`, and it does not grant patch or a general delete on Secrets, claims, Deployments, or StatefulSets. Namespace delete remains on the ClusterRole because RBAC cannot limit it to `st-<id>`. `store-provisioner-admission.yaml` is the separate write boundary and fails closed. That policy has not been enforced on a cluster, so the provisioner is still unsafe to enable on the live release. The gateway label `urumi.dev/gateway: allowed` and the gateway NetworkPolicy egress to `urumi.dev/store: "true"` are added only in that same render.
+
+Per-store WordPress, MariaDB, MCP, policy, quota, and claim objects are built by `apps/gateway/app/stores/manifests.py`. They are not templates in this chart, so a Helm upgrade of the demo release does not create them. `docs/multi-store.md` describes the lifecycle and the disposable-cluster prerequisites.

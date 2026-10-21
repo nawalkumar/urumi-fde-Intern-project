@@ -425,3 +425,24 @@ probes:
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 6
+
+# Off by default. Helm refuses to render the provisioner when enabled is
+# true and admit is false. Admit stays false until a disposable cluster has
+# shown the ValidatingAdmissionPolicy denying cross-namespace writes. The
+# public gateway does not mount the provisioner token. Do not helm upgrade
+# the live release to turn either flag on.
+storeProvisioner:
+  enabled: false
+  admit: false
+  maxPerUser: 3
+  timeoutSeconds: 600
+  concurrency: 2
+  maxAttempts: 5
+  ingressBaseDomain: stores.local
+  ingressNamespace: ingress-nginx
+  allowPluginEgress: false
+  images:
+    wordpress: wordpress:6.8-php8.2-apache
+    mariadb: mariadb:11.4
+    wordpressCli: wordpress:cli-php8.2
+    woocommerceMcp: urumi-woocommerce-mcp:local

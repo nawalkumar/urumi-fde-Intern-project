@@ -280,4 +280,7 @@ failureThreshold: {{ $probe.failureThreshold }}
 {{- fail "Every image needs a repository and a tag." }}
 {{- end }}
 {{- end }}
+{{- if and .Values.storeProvisioner.enabled (not .Values.storeProvisioner.admit) }}
+{{- fail "The store provisioner is non-deployable until storeProvisioner.admit is true and the admission policy is installed. Do not enable it on the live release." }}
+{{- end }}
 {{- end }}

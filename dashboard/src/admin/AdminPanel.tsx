@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { adminRequest, errorText } from "./adminClient";
 import { ChatPanel } from "./ChatPanel";
+import { DiscoveryPanel } from "./DiscoveryPanel";
+import { StorePanel } from "./StorePanel";
 
 type Role = "admin" | "member";
 
@@ -113,7 +115,9 @@ function AdminSession() {
             Sign out
           </button>
           {notice ? <p role="status">{notice}</p> : null}
+          <StorePanel />
           {user.role === "admin" ? <UpstreamManager onNotice={setNotice} /> : null}
+          {user.role === "admin" ? <DiscoveryPanel /> : null}
           {user.role === "admin" ? <MemberManager onNotice={setNotice} /> : null}
           <ChatPanel />
           <KeyManager actor={user} onNotice={setNotice} />

@@ -56,6 +56,15 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    {{- if and .Values.storeProvisioner.enabled .Values.storeProvisioner.admit }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              urumi.dev/store: "true"
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.mcpPort }}
+    {{- end }}
     {{- if .Values.networkPolicy.allowExternalEgress }}
     - to:
         - ipBlock:
@@ -310,8 +319,49 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "urumi.selectorLabels" (list . "gateway") | nindent 14 }}
+        {{- if and .Values.storeProvisioner.enabled .Values.storeProvisioner.admit }}
+        - podSelector:
+            matchLabels:
+              {{- include "urumi.selectorLabels" (list . "store-provisioner") | nindent 14 }}
+        {{- end }}
         {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.database.port }}
+{{- if and .Values.storeProvisioner.enabled .Values.storeProvisioner.admit }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "urumi.serviceName" (list . "store-provisioner-net") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "store-provisioner") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "urumi.selectorLabels" (list . "store-provisioner") | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "urumi.selectorLabels" (list . "gateway-db") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.database.port }}
+    - ports:
+        - protocol: TCP
+          port: 443
+{{- end }}
 {{- end }}

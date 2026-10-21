@@ -1,0 +1,77 @@
+{{- if and .Values.storeProvisioner.enabled .Values.storeProvisioner.admit }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "urumi.serviceName" (list . "store-provisioner") }}
+  labels:
+    {{- include "urumi.componentLabels" (list . "store-provisioner") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "urumi.selectorLabels" (list . "store-provisioner") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.componentLabels" (list . "store-provisioner") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "urumi.serviceName" (list . "store-provisioner") }}
+      automountServiceAccountToken: true
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pythonPodSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: store-provisioner
+          image: {{ include "urumi.image" .Values.gateway.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command:
+            - python
+            - -m
+            - apps.gateway.app.stores.provisioner
+          env:
+            - name: GATEWAY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "urumi.databaseSecretName" . }}
+                  key: {{ .Values.database.secretKeys.conninfo }}
+            - name: UPSTREAM_ALLOW_PRIVATE
+              value: {{ .Values.gateway.allowPrivateUpstreams | quote }}
+            - name: STORE_PROVISIONER_ENABLED
+              value: "true"
+            - name: STORE_CLUSTER_RECONCILER
+              value: "true"
+            - name: STORE_MAX_PER_USER
+              value: {{ .Values.storeProvisioner.maxPerUser | quote }}
+            - name: STORE_PROVISION_TIMEOUT_SECONDS
+              value: {{ .Values.storeProvisioner.timeoutSeconds | quote }}
+            - name: STORE_PROVISION_CONCURRENCY
+              value: {{ .Values.storeProvisioner.concurrency | quote }}
+            - name: STORE_PROVISION_MAX_ATTEMPTS
+              value: {{ .Values.storeProvisioner.maxAttempts | quote }}
+            - name: STORE_INGRESS_BASE_DOMAIN
+              value: {{ .Values.storeProvisioner.ingressBaseDomain | quote }}
+            - name: STORE_GATEWAY_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: STORE_INGRESS_NAMESPACE
+              value: {{ .Values.storeProvisioner.ingressNamespace | quote }}
+            - name: STORE_ALLOW_PLUGIN_EGRESS
+              value: {{ .Values.storeProvisioner.allowPluginEgress | quote }}
+            - name: STORE_IMAGE_WORDPRESS
+              value: {{ .Values.storeProvisioner.images.wordpress | quote }}
+            - name: STORE_IMAGE_MARIADB
+              value: {{ .Values.storeProvisioner.images.mariadb | quote }}
+            - name: STORE_IMAGE_WORDPRESS_CLI
+              value: {{ .Values.storeProvisioner.images.wordpressCli | quote }}
+            - name: STORE_IMAGE_WOO_MCP
+              value: {{ .Values.storeProvisioner.images.woocommerceMcp | quote }}
+          {{- with .Values.pythonContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "urumi.resources" .Values.gateway.resources | nindent 10 }}
+{{- end }}

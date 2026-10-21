@@ -22,6 +22,7 @@ from apps.gateway.app.passwords import generate_password, hash_password, verify_
 from apps.gateway.app.permissions import is_permission_name
 from apps.gateway.app.secretsbox import CredentialKeyMissing, CredentialUnreadable, credential_key_configured, seal_secret
 from apps.gateway.app.ssrf import UnsafeUpstreamUrl, validate_upstream_url
+from apps.gateway.app.stores.model import reserved_store_upstream
 
 _USERNAME = re.compile(r"[a-z][a-z0-9_-]{2,31}")
 _UPSTREAM_ID = re.compile(r"[a-z][a-z0-9_-]{0,62}")
@@ -278,7 +279,7 @@ def register_admin_routes(app: FastAPI, store: object, registry: object, setting
         if isinstance(parsed, JSONResponse):
             return parsed
         upstream_id, url, enabled, credential = parsed
-        if any(item.name == upstream_id for item in settings.upstreams):
+        if reserved_store_upstream(upstream_id) or any(item.name == upstream_id for item in settings.upstreams):
             return _bad()
         try:
             sealed = _seal(credential)
@@ -314,7 +315,7 @@ def register_admin_routes(app: FastAPI, store: object, registry: object, setting
         actor = await _admin(store, request)
         if isinstance(actor, JSONResponse):
             return actor
-        if _UPSTREAM_ID.fullmatch(upstream_id) is None or "__" in upstream_id:
+        if reserved_store_upstream(upstream_id) or _UPSTREAM_ID.fullmatch(upstream_id) is None or "__" in upstream_id:
             return _bad()
         body = await _body(request)
         if body is None or not isinstance(body.get("enabled"), bool):
@@ -388,7 +389,7 @@ def register_admin_routes(app: FastAPI, store: object, registry: object, setting
         actor = await _admin(store, request)
         if isinstance(actor, JSONResponse):
             return actor
-        if any(item.name == upstream_id for item in settings.upstreams):
+        if reserved_store_upstream(upstream_id) or any(item.name == upstream_id for item in settings.upstreams):
             return _bad()
         try:
             current = next((row for row in await store.list_upstreams() if row.upstream_id == upstream_id), None)  # type: ignore[attr-defined]

@@ -13,6 +13,7 @@ Urumi is a Streamable HTTP gateway. An external MCP client sends a Bearer API ke
 | External MCP clients | Call `POST /mcp` | Not a process in this repo. Tests use `mcp.client.streamable_http.streamable_http_client` in `tests/mcp_session.py`. |
 | Authentication and API keys | `apps/gateway/app/keys.py`, `apps/gateway/app/auth.py`, `apps/gateway/app/http_auth.py` | Parse `urk_<key_id>.<secret>`, compare SHA-256, seal a `Principal`. |
 | Tool registry | `apps/gateway/app/registry.py` `Registry` | Namespace tools, drop collisions, route calls. |
+| Discovery | `apps/gateway/app/discovery.py` | Grant-filtered `tools/list` and lexical search. Ranking cannot add a grant. |
 | Upstream catalog | `apps/gateway/app/catalog.py` `merge_upstreams`, `refresh_registry` | Merge environment upstreams with rows an administrator saved. |
 | Support Notes | `apps/support_mcp` | Upstream MCP server. |
 | Utility | `apps/utility_mcp` | Upstream MCP server. |
@@ -39,12 +40,12 @@ The tests do not include a hand-written `initialize` JSON body. They open the of
 
 `create_app` registers `on_list_tools` (`apps/gateway/app/main.py`).
 
-1. `Authenticator.visible_names` returns the exact grants for the sealed key. A failure to read the store returns an empty tool list.
+1. `discover` in `apps/gateway/app/discovery.py` calls `Authenticator.visible_names` for the sealed key. A failure to read the store returns an empty tool list.
 2. `Registry.list_tools_result` refreshes each enabled upstream. An upstream that is disabled, or whose latest list failed or timed out, contributes no tools to this result (`apps/gateway/app/registry.py`). A failed list does not delete a previous successful snapshot. That snapshot can still place a public name in `_collisions`, as described under tool registry.
-3. Public names in `Registry._collisions` are omitted.
-4. The handler keeps only names that are both granted and still advertised.
+3. Public names in `Registry._collisions` are omitted. Names that fail the permission grammar are omitted.
+4. The handler keeps only names that are both granted and still advertised. A store tool also has to pass `store_block_reason`: the store is Ready and the saved upstream is enabled at `mcp_url` for that namespace. The URL is not returned to the client.
 
-A name the key was not granted never appears, even if an upstream registered it. A granted name that collided or whose upstream failed the list does not appear either.
+A name the key was not granted never appears, even if an upstream registered it. A granted name that collided or whose upstream failed the list does not appear either. Search uses the same filter and then ranks the remainder. It does not run for `tools/list`. `POST /discovery/search` is the client route. `GET /admin/discovery` is the operator summary. Neither result is cached across requests.
 
 ### `tools/call`
 
@@ -145,6 +146,14 @@ These limits are stated in `README.md` or `helm/urumi/README.md`, or they are th
 - NetworkPolicy objects do not restrict traffic on a CNI that does not enforce them. Calico v3.30.2 did enforce them on `kind-urumi-k8s-dev` on 2026-10-18. Kindnet does not. The Calico cutover is not in the chart.
 - A Kubernetes Secret is base64, not encryption. Encryption at rest was not verified.
 - The storefront documents disagree, as noted at the top of this file. This note does not say which access path works today.
+
+## Multiple stores
+
+Store rows live in `gateway_stores`, separate from users and API keys. `apps/gateway/app/stores/service.py` writes the row before it asks a cluster client for objects. The client in `apps/gateway/app/stores/cluster.py` only addresses a namespace named `st-` plus the store id. Tests pass `tests/store_cluster.py`. The process does not embed that double.
+
+The existing `woocommerce` upstream is still the demo store from the environment. A provisioned store is a dynamic upstream `store_<id>` and is saved only after the client reports the workloads ready. `ToolDispatcher.execute_tool` and `tools/list` both drop that upstream unless the row is `Ready`. Grants stay exact. A new store adds no grant.
+
+`docs/multi-store.md` records the state machine, the API, the NetworkPolicy shape, and the fact that no cluster was changed when this was added. `storeProvisioner.enabled` and `storeProvisioner.admit` remain false. Helm will not render the provisioner when `admit` is false. The chart renders provisioner RBAC only behind both flags, on a separate Deployment from the gateway.
 
 ## Verification status
 
