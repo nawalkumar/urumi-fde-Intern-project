@@ -1,0 +1,66 @@
+{
+  "generatedAt": "20261025T104439Z",
+  "context": "kind-urumi-k8s-test",
+  "valuesChanged": {
+    "storeProvisioner.apiServerEgress": [
+      {
+        "cidr": "10.96.0.1/32",
+        "port": 443
+      },
+      {
+        "cidr": "172.19.0.2/32",
+        "port": 6443
+      }
+    ]
+  },
+  "renderMatchedReviewedCandidate": true,
+  "release": {
+    "revision": 9,
+    "status": "deployed"
+  },
+  "images": "unchanged: urumi-gateway:chat-egress-20261025T100634Z on gateway and provisioner; pods not restarted (started 10:15:38Z)",
+  "health": {
+    "defaultUnready": [],
+    "defaultRestarts": 0,
+    "storeBUnready": [],
+    "storeBRestarts": 0,
+    "baselineInitHook": "succeeded",
+    "storeB": "Ready"
+  },
+  "pvs": "same 5 volumes and claims as revision 8",
+  "liveProvisionerEgress": [
+    "kube-system DNS 53/UDP+TCP",
+    "gateway-db pods 5432",
+    "10.96.0.1/32 TCP 443",
+    "172.19.0.2/32 TCP 6443"
+  ],
+  "liveGatewayIpBlocks": [
+    "104.18.38.236/32",
+    "172.64.149.20/32"
+  ],
+  "checks": {
+    "provisionerFreshApi": "GET /api/v1/namespaces/st-174c75b6c0ef57e5 -> 200, store-id label matches",
+    "provisionerFreshDb": "PostgresStore open + list_operations -> ok, 0 active",
+    "provisionerDns": {
+      "kubernetes.default.svc.cluster.local": "10.96.0.1",
+      "urumi-gateway-db.default.svc.cluster.local": "10.96.89.113",
+      "api.groq.com": "resolves"
+    },
+    "provisionerBlocked": {
+      "1.1.1.1:443": "blocked",
+      "104.18.38.236:443": "blocked",
+      "172.19.0.2:443": "blocked"
+    },
+    "provisionerLogWarnings3m": 0,
+    "gateway": {
+      "api.groq.com:443": "connect",
+      "1.1.1.1:443": "blocked"
+    },
+    "method": "kubectl exec into existing pods; no diagnostic pods"
+  },
+  "memory": {
+    "hostAvailableMiB": 2486,
+    "testNodeGiB": 2.99
+  },
+  "unexpected": []
+}

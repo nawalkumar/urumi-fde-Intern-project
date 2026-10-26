@@ -1,0 +1,14 @@
+{
+  "base_image": "python:3.10-slim",
+  "context": ".",
+  "context_sha256": "b528b36541ff00539bc63436d394cdf6326255baf2a04183a5f60e8b10488a50",
+  "dirty": true,
+  "dockerfile": "apps/gateway/Dockerfile",
+  "image_id": "sha256:be4630516c3d6dbd0c1a7386fb40ff3d7e6f0f5cb1f32cb5b43408a00f4a1332",
+  "image_name": "urumi-gateway",
+  "limits": "tracked_diff_sha256 hashes git diff HEAD and excludes untracked files. porcelain_sha256 hashes sorted status lines, not file contents. context_sha256 hashes the build-context paths and file bytes left after .dockerignore. None of these hashes reconstructs untracked file contents. dirty true means this build is not a clean reproduction of HEAD.",
+  "porcelain_sha256": "97a5393b1ef0519be56819cae8966e8ca29bdefd74b403be0d4f0cbbd719c50c",
+  "revision": "b4b813c568ca70b45d28944a44de4e8e770f874d",
+  "tag": "urumi-gateway:b4b813c568ca70b45d28944a44de4e8e770f874d-dirty",
+  "tracked_diff_sha256": "c63d32d931f59db923804b4e88180106197498d7a8b52ec1baa1c57eeb9e265c"
+}

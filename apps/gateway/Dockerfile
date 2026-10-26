@@ -37,3 +37,10 @@ EXPOSE 8000
 # unavailable, so a container health check would treat a database outage as a
 # dead process. Kubernetes keeps that distinction in the chart probes.
 CMD ["uvicorn", "apps.gateway.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Application source identity for this final stage. unknown is not HEAD.
+# These keys do not replace base-image OCI labels.
+ARG URUMI_SOURCE_REVISION=unknown
+ARG URUMI_SOURCE_DIRTY=unknown
+LABEL io.urumi.source.revision="${URUMI_SOURCE_REVISION}" \
+      io.urumi.source.dirty="${URUMI_SOURCE_DIRTY}"

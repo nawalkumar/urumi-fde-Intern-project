@@ -1,0 +1,130 @@
+{
+  "generatedAt": "20261025T032926Z",
+  "context": "kind-urumi-k8s-test",
+  "installed": false,
+  "valuesFile": "helm/urumi/values-kind-urumi-k8s-test.local.yaml",
+  "gitignore": "helm/urumi/values-kind-urumi-k8s-test.local.yaml",
+  "valuesDevUnchanged": true,
+  "proposedValuesUnchanged": true,
+  "probeCIDR": "172.19.0.2/32",
+  "storageClass": "standard",
+  "imagePullPolicy": "IfNotPresent",
+  "storeEnabled": true,
+  "storeProvisionerEnabled": false,
+  "storeProvisionerAdmit": false,
+  "requireCapturedProbeCidrs": true,
+  "ingressEnabled": false,
+  "allowExternalEgress": false,
+  "access": {
+    "method": "kubectl port-forward to ClusterIP Services",
+    "hostPorts80And443Untouched": true,
+    "portForwardBypassesDenyAllNetworkPolicy": true,
+    "dashboard": "kubectl --context kind-urumi-k8s-test -n default port-forward svc/urumi-dashboard 18081:80",
+    "wordpress": "kubectl --context kind-urumi-k8s-test -n default port-forward svc/urumi-wordpress 18080:80",
+    "storePublicUrl": "http://127.0.0.1:18080"
+  },
+  "helmTemplate": {
+    "exit": 0,
+    "objects": 30,
+    "kinds": {
+      "NetworkPolicy": 8,
+      "ServiceAccount": 1,
+      "ConfigMap": 3,
+      "PersistentVolumeClaim": 1,
+      "Service": 8,
+      "Deployment": 6,
+      "StatefulSet": 2,
+      "Job": 1
+    }
+  },
+  "serverDryRun": {
+    "exit": 0,
+    "persisted": false
+  },
+  "failClosed": {
+    "emptyProbeCidrsExit": 1,
+    "emptyProbeCIDRListExit": 1,
+    "widerPrefixExit": 1
+  },
+  "databasePoliciesIncludeProbeCIDR": false,
+  "provisionerObjectsRendered": false,
+  "resourceQuotaRendered": false,
+  "limitRangeRendered": false,
+  "secretsEmbedded": false,
+  "images": [
+    {
+      "tag": "urumi-gateway:disposable-manual-20261024",
+      "dockerImageId": "sha256:be4630516c3d6dbd0c1a7386fb40ff3d7e6f0f5cb1f32cb5b43408a00f4a1332",
+      "nodeImageId": "sha256:2a2a8667801103dfbbbc2d31d3808c5c9c4d1b508f4e6b79f59e09a26574193d",
+      "layerDiffIdsMatch": true,
+      "layerCount": 7
+    },
+    {
+      "tag": "urumi-dashboard:disposable-pkg-20261024",
+      "dockerImageId": "sha256:72c3233564d8ac84920e76748534cc5439d270b2505c58b08a305ebdc567436a",
+      "nodeImageId": "sha256:57882105eceb61ef66b20b1db4d009699dcbfa04401ae9cbdbf4462cce8e52d6",
+      "layerDiffIdsMatch": true,
+      "layerCount": 10
+    },
+    {
+      "tag": "urumi-support-mcp:disposable-pkg-20261024",
+      "dockerImageId": "sha256:e1f8735456f9f1528b3d768945785874a37191ac1a934c1b08924cfdf9d223b3",
+      "nodeImageId": "sha256:62bdbd5d7c09d8d3e80488f077cf1323ce971e0bff4a326f93846cc74502ffe6",
+      "layerDiffIdsMatch": true,
+      "layerCount": 7
+    },
+    {
+      "tag": "urumi-utility-mcp:disposable-pkg-20261024",
+      "dockerImageId": "sha256:aa458e9a694bd7dc38e5c4ec515ecb752371716306e2b5e4055cb4fb953bdb19",
+      "nodeImageId": "sha256:4bb40b5be65756f7b6314b94f665c5cd67691899e92276ef080c4e4133114a7d",
+      "layerDiffIdsMatch": true,
+      "layerCount": 7
+    },
+    {
+      "tag": "urumi-woocommerce-mcp:disposable-pkg-20261024",
+      "dockerImageId": "sha256:f5100088180f29b8b83257cdeeaadd1a1772e19074795645191d4b7a19ae809f",
+      "nodeImageId": "sha256:453a9c3482f496422a77cbb9f787757e0f5bd008a3a46aab99a0792d2e5f101b",
+      "layerDiffIdsMatch": true,
+      "layerCount": 7
+    },
+    {
+      "tag": "urumi-wordpress-woo:disposable-readiness-20261024",
+      "dockerImageId": "sha256:a9137b31865af63b773bade56cba470f52fd70b24715bc83dfeb915c8c9c19ab",
+      "nodeImageId": "sha256:5a344b9dc4aaa3c4c137d1a6bc0d83095f8248ea6fce28939be68814e2f26c35",
+      "layerDiffIdsMatch": true,
+      "layerCount": 26
+    },
+    {
+      "tag": "mariadb:11.4",
+      "dockerImageId": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+      "nodeImageId": "sha256:ab3dff582d246358b6f6a1f6212f29ac64609fad883eb3dcfb0a89f6f7d0700e",
+      "layerDiffIdsMatch": true,
+      "layerCount": 8
+    },
+    {
+      "tag": "wordpress:cli-php8.2",
+      "dockerImageId": "sha256:b99fac444f68b8d41b23c6496c7c036082d86a2f6a2b669217d0987a06ef775f",
+      "nodeImageId": "sha256:47743b34c40943556155a9f701edb15b7c22bf4af3dba839fc9b8cc76a4e0d91",
+      "layerDiffIdsMatch": true,
+      "layerCount": 17
+    },
+    {
+      "tag": "postgres:16-alpine",
+      "dockerImageId": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+      "nodeImageId": "sha256:81bd698b4594e751a3269e4dcd3e03a4a0ec0daf7b72e7aa1abd43cce9887542",
+      "layerDiffIdsMatch": true,
+      "layerCount": 11
+    }
+  ],
+  "devNodeDisposableTags": [],
+  "calicoIgnoreAnnotation": true,
+  "requiredSecretsAbsent": [
+    "urumi-test-gateway-db",
+    "urumi-test-store"
+  ],
+  "optionalSecretsAbsent": [
+    "urumi-test-chat",
+    "urumi-test-gateway-keys",
+    "urumi-test-woocommerce"
+  ]
+}

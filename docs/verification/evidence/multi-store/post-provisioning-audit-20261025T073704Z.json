@@ -1,0 +1,157 @@
+{
+  "generatedAt": "20261025T073704Z",
+  "mode": "read-only audit",
+  "context": "kind-urumi-k8s-test",
+  "currentShellContext": "kind-urumi-k8s-dev (not used; every command passed --context or --kube-context)",
+  "clusterMutations": false,
+  "helm": {
+    "release": "urumi",
+    "namespace": "default",
+    "revision": 6,
+    "status": "deployed",
+    "valueChanges": {
+      "rev3_to_rev4": "none; chart template change adds TCP 6443 to urumi-store-provisioner-net",
+      "rev4_to_rev5": "gateway.image.tag probe-blank-20261025T053424Z -> apply-skip-20261025T071015Z",
+      "rev5_to_rev6": "gateway.image.tag apply-skip-20261025T071015Z -> job-stable-20261025T071558Z"
+    },
+    "rev5_to_rev6_manifestDiff": "only the gateway and store-provisioner container image lines",
+    "secretsInManifest": 0
+  },
+  "baseline": {
+    "allReady": true,
+    "restarts": 0,
+    "rolloutsComplete": true,
+    "gatewayImage": "urumi-gateway:job-stable-20261025T071558Z",
+    "warningEvents": [
+      "utility-mcp readiness timeout once at 2026-10-25T07:09:47Z during store provisioning load; no restart; Ready now",
+      "gateway startup probe refused at 2026-10-25T07:16:57Z during revision 6 rollout; Ready now"
+    ],
+    "pvcs": {
+      "data-urumi-gateway-db-0": "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971 Bound",
+      "data-urumi-store-db-0": "pvc-8ca68528-e380-4896-a925-335cafddda34 Bound",
+      "urumi-wordpress-data": "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a Bound"
+    },
+    "pvcsCreated": "2026-10-25T03:50:03Z (unchanged since install)",
+    "wordpressInstalled": true,
+    "woocommerceActive": true,
+    "administratorCount": 1,
+    "staticFileStatus": "HTTP/1.1 200 OK",
+    "gatewayHealth": "ok"
+  },
+  "store": {
+    "apiRead": "GET /admin/stores and /admin/stores/{id} with an existing session; no login, no write",
+    "store_id": "c4421147ea825bbc",
+    "name": "acceptance-store-a",
+    "state": "Ready",
+    "phase": "ready",
+    "attempt": 0,
+    "namespace": "st-c4421147ea825bbc",
+    "namespaceLabels": {
+      "urumi.dev/store-id": "c4421147ea825bbc",
+      "urumi.dev/owner-id": "169d3b25942f065b",
+      "urumi.dev/store": "true"
+    },
+    "objectsOwnedByLabel": 22,
+    "labelGap": "PVC data-store-db-0 (StatefulSet volumeClaimTemplate) has only app.kubernetes.io/component and name; no urumi.dev/store-id or owner-id. Namespace scope still bounds it. Not repaired.",
+    "pods": {
+      "store-db-0": "Ready 0 restarts",
+      "wordpress": "Ready 0 restarts",
+      "woo-mcp": "Ready 0 restarts",
+      "wordpress-init": "Succeeded"
+    },
+    "job": "succeeded=1",
+    "pvcs": {
+      "data-store-db-0": "pvc-cfec2069-30de-43ee-b62f-7f02c16a7aa3 Bound standard",
+      "wordpress-data": "pvc-00ba996f-ea68-4f44-ab5d-26184b9201c7 Bound standard"
+    },
+    "probes": {
+      "wordpress": "/wp-includes/images/blank.gif",
+      "woo-mcp": "/health"
+    },
+    "quotaHard": {
+      "requests.cpu": "2",
+      "requests.memory": "2Gi",
+      "limits.cpu": "4",
+      "limits.memory": "4Gi",
+      "pods": "8",
+      "persistentvolumeclaims": "2",
+      "services": "6"
+    },
+    "quotaUsed": {
+      "requests.cpu": "225m",
+      "requests.memory": "576Mi",
+      "limits.cpu": "1250m",
+      "limits.memory": "1280Mi",
+      "pods": "3",
+      "persistentvolumeclaims": "2",
+      "services": "3"
+    },
+    "quotaEnforcementObserved": "FailedCreate events at 2026-10-25T07:16-07:17Z: wordpress-init pods forbidden, exceeded quota pods=8 during the pre-fix Job churn",
+    "limitRange": {
+      "max": {
+        "cpu": "1",
+        "memory": "768Mi"
+      },
+      "default": {
+        "cpu": "250m",
+        "memory": "256Mi"
+      },
+      "defaultRequest": {
+        "cpu": "25m",
+        "memory": "64Mi"
+      }
+    },
+    "networkPolicies": [
+      "default-deny",
+      "store-db",
+      "woo-mcp",
+      "wordpress",
+      "wordpress-init"
+    ],
+    "ingress": "store class=nginx host=c4421147ea825bbc.stores.local (no controller installed)",
+    "orphanVolumesFromFailedAttempts": 0
+  },
+  "mcp": {
+    "dynamicUpstream": "store_c4421147ea825bbc http://woo-mcp.st-c4421147ea825bbc.svc.cluster.local:8000/mcp listing_ok advertised=6 has_credential=False",
+    "registeredTools": [
+      "store_c4421147ea825bbc__create_order",
+      "store_c4421147ea825bbc__create_product",
+      "store_c4421147ea825bbc__get_order",
+      "store_c4421147ea825bbc__list_orders",
+      "store_c4421147ea825bbc__list_products",
+      "store_c4421147ea825bbc__update_order_status"
+    ],
+    "staticWoocommerce": "listing_ok advertised=0 (no baseline consumer keys)",
+    "keys": {
+      "40ab7159b6c06f90": {
+        "revoked": false,
+        "permissions": []
+      }
+    },
+    "auditStoreEvents": [
+      "05:43:32 admin:create_store success",
+      "05:44:40 admin:provision_failed error",
+      "07:07:51 admin:retry_store success",
+      "07:08:06 admin:provision_failed error",
+      "07:08:50 admin:retry_store success",
+      "07:09:04 admin:provision_failed error",
+      "07:11:56 admin:retry_store success",
+      "07:17:47 admin:provision_store success"
+    ],
+    "auditDeniedCall": "07:18:55 store_c4421147ea825bbc__list_orders unauthorized"
+  },
+  "memory": {
+    "hostAvailableMiB": 2530,
+    "hostUsedMiB": 4831,
+    "testNodeDockerGiB": 2.969,
+    "testNodeCgroupMiB": 3340,
+    "devNodeDockerGiB": 1.704
+  },
+  "notDone": [
+    "second store",
+    "delete",
+    "chat",
+    "public egress",
+    "dashboard UI session"
+  ]
+}

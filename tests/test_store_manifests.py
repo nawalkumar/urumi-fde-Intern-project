@@ -88,6 +88,36 @@ def test_resources_are_named_and_labeled_for_one_store() -> None:
     stateful = _by_kind(resources, "StatefulSet")[0]
     assert claims[0]["metadata"]["name"] == "wordpress-data"
     assert stateful["spec"]["volumeClaimTemplates"][0]["metadata"]["name"] == "data"
+    claim_labels = stateful["spec"]["volumeClaimTemplates"][0]["metadata"]["labels"]
+    assert claim_labels["urumi.dev/store-id"] == spec.store_id
+    assert claim_labels["urumi.dev/owner-id"] == spec.owner_id
+    for key, value in stateful["spec"]["selector"]["matchLabels"].items():
+        assert claim_labels[key] == value
+    assert stateful["spec"]["persistentVolumeClaimRetentionPolicy"]["whenDeleted"] == "Delete"
+    database_container = stateful["spec"]["template"]["spec"]["containers"][0]
+    assert database_container["volumeMounts"] == [{"name": "data", "mountPath": "/var/lib/mysql"}]
+    mounted = {
+        mount["name"]
+        for container in stateful["spec"]["template"]["spec"]["containers"]
+        for mount in container.get("volumeMounts", [])
+    }
+    assert {claim["metadata"]["name"] for claim in stateful["spec"]["volumeClaimTemplates"]} <= mounted
+    assert database_container["livenessProbe"]["exec"]["command"][0] == "bash"
+    assert "tcpSocket" not in database_container["livenessProbe"]
+    wordpress = next(item for item in _by_kind(resources, "Deployment") if item["metadata"]["name"] == "wordpress")
+    mcp = next(item for item in _by_kind(resources, "Deployment") if item["metadata"]["name"] == "woo-mcp")
+    wordpress_probe = wordpress["spec"]["template"]["spec"]["containers"][0]
+    assert wordpress_probe["readinessProbe"]["httpGet"]["path"] == "/wp-includes/images/blank.gif"
+    assert wordpress_probe["livenessProbe"]["httpGet"]["path"] == "/wp-includes/images/blank.gif"
+    assert mcp["spec"]["template"]["spec"]["containers"][0]["livenessProbe"]["httpGet"]["path"] == "/health"
+    init = _by_kind(resources, "Job")[0]
+    download = next(item for item in init["spec"]["template"]["spec"]["containers"][0]["env"] if item["name"] == "WORDPRESS_PLUGIN_DOWNLOAD")
+    assert download["value"] == "false"
+    script = next(item for item in resources if item["metadata"]["name"] == "store-init")
+    assert "plugin download is disabled" in script["data"]["init-store.sh"]
+    assert script["data"]["init-store.sh"].index("wp db check") < script["data"]["init-store.sh"].index("wp core is-installed")
+    assert '"consumer_secret" => $secret' in script["data"]["init-store.sh"]
+    assert "wc_api_hash($secret)" not in script["data"]["init-store.sh"]
     account = _by_kind(resources, "ServiceAccount")[0]
     assert account["automountServiceAccountToken"] is False
 
@@ -170,7 +200,10 @@ def test_provisioner_rbac_is_not_cluster_admin() -> None:
     assert blocked.returncode != 0
     assert "non-deployable" in blocked.stderr
     assert "lint-placeholder" not in blocked.stderr
-    enabled = _helm("storeProvisioner.enabled=true", "storeProvisioner.admit=true")
+    orphan = _helm("storeProvisioner.enabled=false", "storeProvisioner.admit=true")
+    assert orphan.returncode != 0
+    assert "admit cannot be true" in orphan.stderr
+    enabled = _helm("storeProvisioner.enabled=true", "storeProvisioner.admit=true", "storeProvisioner.storageClass=local-path")
     assert enabled.returncode == 0, enabled.stderr
     rendered = enabled.stdout
     assert "kind: ClusterRole" in rendered
@@ -184,19 +217,33 @@ def test_provisioner_rbac_is_not_cluster_admin() -> None:
     role = _document(rendered, "ClusterRole")
     verb_lines = [line.strip() for line in role.splitlines() if line.strip().startswith("verbs:")]
     assert verb_lines.count('verbs: ["get", "create", "delete"]') == 1
+    assert verb_lines.count('verbs: ["get", "list", "delete"]') == 1
+    assert verb_lines.count('verbs: ["delete"]') == 1
+    allowed_deletes = {
+        'verbs: ["get", "create", "delete"]',
+        'verbs: ["get", "list", "delete"]',
+        'verbs: ["delete"]',
+    }
     assert all("patch" not in line for line in verb_lines)
-    assert all("delete" not in line or line == 'verbs: ["get", "create", "delete"]' for line in verb_lines)
+    assert all("delete" not in line or line in allowed_deletes for line in verb_lines)
     assert 'resourceNames: ["store-db", "woocommerce-credentials"]' in role
     assert 'resources: ["*"]' not in role
     gateway = _document(rendered, "Deployment", "urumi-gateway")
     assert "store-provisioner" not in gateway
     assert "automountServiceAccountToken: true" not in gateway
     assert "STORE_CLUSTER_RECONCILER" not in gateway
+    provisioner_net = _document(rendered, "NetworkPolicy", "urumi-store-provisioner-net")
+    assert "port: 443" in provisioner_net
+    assert "port: 6443" in provisioner_net
     provisioner = _document(rendered, "Deployment", "urumi-store-provisioner")
     assert "serviceAccountName: urumi-store-provisioner" in provisioner
     assert "automountServiceAccountToken: true" in provisioner
     assert "apps.gateway.app.stores.provisioner" in provisioner
     assert "CHAT_API" not in provisioner
+    assert "STORE_STORAGE_CLASS" in provisioner
+    assert 'value: "local-path"' in provisioner
+    assert "claimRef.namespace" in rendered
+    assert "persistentvolumes" in role
 
 
 def _document(text: str, kind: str, name: str | None = None) -> str:

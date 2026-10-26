@@ -1,0 +1,61 @@
+{
+  "generatedAt": "20261025T035841Z",
+  "context": "kind-urumi-k8s-test",
+  "namespace": "default",
+  "release": "urumi",
+  "revision": 2,
+  "status": "deployed",
+  "firstInstallHook": "failed on wordpress-init because the entered admin login was not a valid WordPress login; revision 2 completed after the secret key was aligned to the stored administrator and probes were pointed at a static file",
+  "secretsPrinted": false,
+  "storeProvisionerEnabled": false,
+  "allowExternalEgress": false,
+  "ingressEnabled": false,
+  "podsReady": [
+    "urumi-dashboard",
+    "urumi-gateway",
+    "urumi-gateway-db-0",
+    "urumi-store-db-0",
+    "urumi-support-mcp",
+    "urumi-utility-mcp",
+    "urumi-woocommerce-mcp",
+    "urumi-wordpress"
+  ],
+  "initJob": "Complete",
+  "pvcsBound": [
+    "data-urumi-gateway-db-0",
+    "data-urumi-store-db-0",
+    "urumi-wordpress-data"
+  ],
+  "pvcDeleted": false,
+  "health": {
+    "gatewayInPod": 200,
+    "dashboardToGateway": 200,
+    "dashboardLocalhost": 200,
+    "wordpressLocalhost": 200,
+    "support": 200,
+    "utility": 200,
+    "woocommerceMcp": 200
+  },
+  "images": {
+    "gateway": "urumi-gateway:disposable-manual-20261024",
+    "dashboard": "urumi-dashboard:disposable-pkg-20261024",
+    "support": "urumi-support-mcp:disposable-pkg-20261024",
+    "utility": "urumi-utility-mcp:disposable-pkg-20261024",
+    "woocommerce": "urumi-woocommerce-mcp:disposable-pkg-20261024",
+    "wordpress": "urumi-wordpress-woo:disposable-readiness-20261024",
+    "mariadb": "mariadb:11.4",
+    "postgres": "postgres:16-alpine",
+    "wordpressCli": "wordpress:cli-php8.2"
+  },
+  "access": {
+    "dashboard": "kubectl --context kind-urumi-k8s-test -n default port-forward --address 127.0.0.1 svc/urumi-dashboard 18081:80",
+    "wordpress": "kubectl --context kind-urumi-k8s-test -n default port-forward --address 127.0.0.1 svc/urumi-wordpress 18080:80"
+  },
+  "hostMemoryAvailableGi": 2.7,
+  "defaultPodRequestMi": 1152,
+  "chatVerified": false,
+  "woocommerceConsumerKeysPresent": false,
+  "multiStoreVerified": false,
+  "calicoIgnoreAnnotation": true,
+  "devClusterModified": false
+}

@@ -407,7 +407,7 @@ def _env_from_secret(name: str, key: str, secret_name: str) -> dict[str, object]
 
 def _db_statefulset(spec: StoreSpec) -> dict[str, object]:
     claim: dict[str, object] = {
-        "metadata": {"name": "data"},
+        "metadata": {"name": "data", "labels": labels(spec, "store-db")},
         "spec": {
             "accessModes": ["ReadWriteOnce"],
             "resources": {"requests": {"storage": "2Gi"}},
@@ -422,6 +422,7 @@ def _db_statefulset(spec: StoreSpec) -> dict[str, object]:
         "spec": {
             "serviceName": "store-db",
             "replicas": 1,
+            "persistentVolumeClaimRetentionPolicy": {"whenDeleted": "Delete", "whenScaled": "Retain"},
             "selector": {"matchLabels": _selector("store-db")},
             "template": {
                 "metadata": {"labels": labels(spec, "store-db")},
@@ -447,7 +448,21 @@ def _db_statefulset(spec: StoreSpec) -> dict[str, object]:
                                 {"cpu": "100m", "memory": "256Mi"},
                                 {"cpu": "500m", "memory": "512Mi"},
                             ),
-                            "readinessProbe": {"tcpSocket": {"port": 3306}, "periodSeconds": 10},
+                            "readinessProbe": {
+                                "exec": {"command": ["bash", "-c", "echo > /dev/tcp/127.0.0.1/3306"]},
+                                "periodSeconds": 10,
+                                "timeoutSeconds": 3,
+                            },
+                            "livenessProbe": {
+                                "exec": {"command": ["bash", "-c", "echo > /dev/tcp/127.0.0.1/3306"]},
+                                "initialDelaySeconds": 30,
+                                "periodSeconds": 20,
+                                "timeoutSeconds": 3,
+                                "failureThreshold": 6,
+                            },
+                            # Without this mount MariaDB writes to a per-container
+                            # image volume that is lost when the container is recreated.
+                            "volumeMounts": [{"name": "data", "mountPath": "/var/lib/mysql"}],
                         }
                     ],
                 },
@@ -489,7 +504,18 @@ def _wordpress_deployment(spec: StoreSpec) -> dict[str, object]:
                                 {"cpu": "100m", "memory": "256Mi"},
                                 {"cpu": "500m", "memory": "512Mi"},
                             ),
-                            "readinessProbe": {"httpGet": {"path": "/", "port": 80}, "periodSeconds": 10},
+                            "readinessProbe": {
+                                "httpGet": {"path": "/wp-includes/images/blank.gif", "port": 80},
+                                "periodSeconds": 10,
+                                "timeoutSeconds": 3,
+                            },
+                            "livenessProbe": {
+                                "httpGet": {"path": "/wp-includes/images/blank.gif", "port": 80},
+                                "initialDelaySeconds": 30,
+                                "periodSeconds": 20,
+                                "timeoutSeconds": 3,
+                                "failureThreshold": 6,
+                            },
                             "volumeMounts": [{"name": "data", "mountPath": "/var/www/html"}],
                         }
                     ],
@@ -557,7 +583,18 @@ def _mcp_deployment(spec: StoreSpec) -> dict[str, object]:
                                 {"cpu": "25m", "memory": "64Mi"},
                                 {"cpu": "250m", "memory": "256Mi"},
                             ),
-                            "readinessProbe": {"httpGet": {"path": "/health", "port": 8000}, "periodSeconds": 10},
+                            "readinessProbe": {
+                                "httpGet": {"path": "/health", "port": 8000},
+                                "periodSeconds": 10,
+                                "timeoutSeconds": 3,
+                            },
+                            "livenessProbe": {
+                                "httpGet": {"path": "/health", "port": 8000},
+                                "initialDelaySeconds": 10,
+                                "periodSeconds": 20,
+                                "timeoutSeconds": 3,
+                                "failureThreshold": 6,
+                            },
                         }
                     ],
                 },
@@ -603,6 +640,10 @@ def _init_job(spec: StoreSpec) -> dict[str, object]:
                                 _env_from_config("WORDPRESS_TITLE"),
                                 _env_from_config("WORDPRESS_CONFIG_WAIT_ATTEMPTS"),
                                 _env_from_secret("WORDPRESS_DB_PASSWORD", "MARIADB_PASSWORD", "store-db"),
+                                {
+                                    "name": "WORDPRESS_PLUGIN_DOWNLOAD",
+                                    "value": "true" if spec.allow_plugin_egress else "false",
+                                },
                                 {"name": "WORDPRESS_ADMIN_USER", "value": "storeadmin"},
                                 _env_from_secret("WORDPRESS_ADMIN_PASSWORD", "WORDPRESS_ADMIN_PASSWORD", "store-db"),
                                 {"name": "WORDPRESS_ADMIN_EMAIL", "value": f"{spec.store_id}@stores.local"},

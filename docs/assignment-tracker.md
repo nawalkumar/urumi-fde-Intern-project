@@ -2,6 +2,8 @@
 
 Status date: 2026-10-18. Context: `kind-urumi-k8s-dev`.
 
+Scope note added 2026-10-26: this file is the history of the older `kind-urumi-k8s-dev` deployment, whose images predate the submission tree. Every "Done" below was observed on those older images, not on the current build. Later work on `kind-urumi-k8s-test` is in `docs/verification/multi-store-acceptance.md`. The current submission status is `docs/SUBMISSION_TRACKER.md`.
+
 This file is the working list for the internship assignment: a WooCommerce store on Kubernetes, a custom WooCommerce MCP server, a team MCP gateway, and a dashboard chat agent. Work one module at a time. Do not start the next module until the current module’s “Done when” check passes.
 
 Evidence for older passes is in `docs/baseline-verification.md`. That file does not replace this tracker. On 2026-10-18 the dev cluster was up on `kind-urumi-k8s-dev`. Modules 1 through 10 and Module 12 have recorded live checks. Chat used Groq, and the provider key stayed in Secret `urumi-dev-chat`. Module 11 is still partial: `values-vps.yaml` was rendered, and no VPS was deployed.
@@ -472,11 +474,9 @@ Say only the line that matches the evidence.
 
 ## Bonus — multiple stores
 
-**Status:** Implemented in this checkout on 2026-10-20. Not runtime-verified. No store was created on `kind-urumi-k8s-dev` or `kind-urumi-k8s-test`. `helm upgrade` was not run. Images were not rebuilt. `values-dev.yaml` was not edited. `storeProvisioner.enabled` remains false.
+**Status (updated 2026-10-26):** Partially demonstrated on `kind-urumi-k8s-test`. Not on `kind-urumi-k8s-dev`: no store was created there, its `values-dev.yaml` was not edited, and its release does not enable the provisioner.
 
-The design is `docs/multi-store.md`. The dashboard has a Stores section. The gateway stores a row before any cluster call. A separate provisioner process, not the public gateway, would apply `st-<id>` objects. `storeProvisioner.enabled` and `storeProvisioner.admit` stay false, and Helm will not render the provisioner without `admit`. Secret reads are name-limited. Namespace delete still cannot be limited with a ClusterRole, so a ValidatingAdmissionPolicy is the write boundary and has not been enforced on a cluster. Provisioning remains unsafe to enable.
-
-The next check belongs on a new cluster whose context name contains `disposable`. `scripts/disposable-store-acceptance.sh` refuses the existing Kind contexts. It was not executed.
+The design is `docs/multi-store.md`. The 2026-10-20 entry here said the feature was not runtime-verified. That was true then. On 2026-10-25 the owner authorized `kind-urumi-k8s-test` for a live pass. The provisioner and admission policy were enabled there through a gitignored overlay. Stores were created, made Ready, isolated, and deleted, and one out-of-scope admission dry-run was denied. The criterion-by-criterion record is `docs/verification/multi-store-acceptance.md`. `scripts/disposable-store-acceptance.sh --execute` was not used; the live pass used reviewed manual commands.
 
 ## Suggested order
 

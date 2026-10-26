@@ -31,6 +31,18 @@ require WORDPRESS_ADMIN_EMAIL
 require WOOCOMMERCE_CONSUMER_KEY
 require WOOCOMMERCE_CONSUMER_SECRET
 
+# wp-config.php can exist before MariaDB accepts connections. Retry without
+# printing the client error, which repeats the database account.
+i=0
+until wp db check >/dev/null 2>&1; do
+  i=$((i + 1))
+  if [ "$i" -gt "$attempts" ]; then
+    echo "MariaDB did not accept a connection." >&2
+    exit 1
+  fi
+  sleep 2
+done
+
 if wp core is-installed >/dev/null 2>&1; then
   echo "WordPress is already installed."
 else
@@ -45,8 +57,11 @@ fi
 
 if wp plugin is-installed woocommerce >/dev/null 2>&1; then
   wp plugin activate woocommerce >/dev/null
-else
+elif [ "${WORDPRESS_PLUGIN_DOWNLOAD:-}" = "true" ]; then
   wp plugin install woocommerce --activate
+else
+  echo "WooCommerce is not in the WordPress image and plugin download is disabled." >&2
+  exit 1
 fi
 
 wp option update permalink_structure '/%postname%/' >/dev/null
@@ -74,7 +89,7 @@ $inserted = $wpdb->insert($table, array(
     "description" => "urumi-gateway",
     "permissions" => "read_write",
     "consumer_key" => wc_api_hash($key),
-    "consumer_secret" => wc_api_hash($secret),
+    "consumer_secret" => $secret,
     "truncated_key" => substr($key, -7),
 ));
 if (!$inserted) {

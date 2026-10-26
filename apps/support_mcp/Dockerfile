@@ -36,3 +36,9 @@ EXPOSE 8000
 # No image HEALTHCHECK. Process liveness is not the same thing as upstream
 # listing success. Compose and the Helm chart already probe GET /health.
 CMD ["uvicorn", "apps.support_mcp.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Application source identity for this final stage. unknown is not HEAD.
+ARG URUMI_SOURCE_REVISION=unknown
+ARG URUMI_SOURCE_DIRTY=unknown
+LABEL io.urumi.source.revision="${URUMI_SOURCE_REVISION}" \
+      io.urumi.source.dirty="${URUMI_SOURCE_DIRTY}"

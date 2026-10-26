@@ -1,0 +1,105 @@
+{
+  "captured_at": "2026-10-25T03:06:22Z",
+  "kube_context": "kind-urumi-k8s-test",
+  "git": {
+    "branch": "submission",
+    "head": "b4b813c568ca70b45d28944a44de4e8e770f874d",
+    "state_changed": false
+  },
+  "repair": {
+    "backup": "docs/verification/evidence/multi-store/calico-node-before-repair-20261025T025758Z.json",
+    "annotation": "unsupported.operator.tigera.io/ignore=true",
+    "removed": [
+      "containers/0/volumeMounts/5 sys-kernel-security",
+      "volumes/10 sys-kernel-security"
+    ],
+    "indexes_rechecked_immediately_before_patch": true,
+    "daemonset_generation_after": 2,
+    "security_volume_still_absent": true,
+    "operator_scaled": false,
+    "pod": "calico-node-ck8hf Running 1/1",
+    "nodename_file": "urumi-k8s-test-control-plane",
+    "felix": "v3.33.0 iptables backend nft, NFTablesMode Disabled, BPFEnabled false, 235 cali- chains",
+    "workaround": "unsupported temporary annotation. The operator will not update this DaemonSet until the annotation is removed. Removing it restores the securityfs mount and returns calico-node to CreateContainerError on this WSL2 kernel."
+  },
+  "rollback": [
+    "kubectl --context kind-urumi-k8s-test annotate daemonset calico-node -n calico-system unsupported.operator.tigera.io/ignore-",
+    "kubectl --context kind-urumi-k8s-test annotate installation default --overwrite reconcile-request=$(date +%s)",
+    "kubectl --context kind-urumi-k8s-test annotate installation default reconcile-request-"
+  ],
+  "cluster_after": {
+    "server": "v1.34.11",
+    "node": "urumi-k8s-test-control-plane Ready 172.19.0.2",
+    "all_existing_pods_running": true,
+    "helm_releases": [],
+    "pv_pvc": []
+  },
+  "dns": {
+    "kube_dns_endpoints": [
+      "192.168.184.129:53",
+      "192.168.184.130:53"
+    ],
+    "lookup": "kubernetes.default.svc.cluster.local -> 10.96.0.1 via 10.96.0.10",
+    "service_lookup": "probe-server.urumi-probe-20261025.svc.cluster.local -> 10.96.86.251"
+  },
+  "networkpolicy": {
+    "namespace": "urumi-probe-20261025",
+    "before_policy": {
+      "probe-client": "wget exit 0",
+      "probe-stranger": "wget exit 0"
+    },
+    "deny_ingress": {
+      "probe-client": "timeout exit 1",
+      "probe-stranger": "timeout exit 1"
+    },
+    "allow_only_probe_client": {
+      "probe-client": "HTTP/1.1 200 OK",
+      "probe-stranger": "timeout exit 1"
+    },
+    "enforcement": "passed"
+  },
+  "probe_source": {
+    "method": "conntrack on the test node while kubelet httpGet probes hit probe-server 192.168.184.134:8080",
+    "observed_source": "172.19.0.2",
+    "cidr": "172.19.0.2/32",
+    "not_copied_from": [
+      "values-dev.yaml",
+      "172.19.0.3/32"
+    ],
+    "also_seen": "kubelet 172.19.0.2 probing CoreDNS pods on port 8080; client pod 192.168.184.136 connecting to the Service 10.96.86.251"
+  },
+  "storage": {
+    "class": "standard",
+    "provisioner": "rancher.io/local-path",
+    "reclaim": "Delete",
+    "binding": "WaitForFirstConsumer",
+    "claim": "urumi-probe-20261025/urumi-storage-probe-20261025",
+    "volume": "pvc-a56fa70d-8018-4e4e-846d-03d3db537a95",
+    "write_read": "probe-ok",
+    "cleanup": "PVC stayed Terminating while the completed pod still existed because of kubernetes.io/pvc-protection. After that pod was deleted, the PV became Released and was then removed. No PV or PVC remains."
+  },
+  "ingress": {
+    "controller_installed": false,
+    "host_port_80": "published by urumi-k8s-test-control-plane and held inside that network namespace by docker container urumi-dev-port80, command: python /forward.py 172.19.0.2 80",
+    "host_port_443": "published, no listener inside the node",
+    "action": "ingress-nginx was not installed, so it would not contend for port 80 or the dev forwarder"
+  },
+  "chart": {
+    "file": "helm/urumi/values-disposable-proposed.yaml",
+    "helm_template_exit": 1,
+    "error": "storeProvisioner.probeCidrs is empty",
+    "storage_class_in_file": "local-path",
+    "storage_class_on_cluster": "standard",
+    "images_present_in_docker": {
+      "urumi-gateway:disposable-manual-20261024": "sha256:be4630516c3d6dbd0c1a7386fb40ff3d7e6f0f5cb1f32cb5b43408a00f4a1332",
+      "urumi-gateway:disposable-pkg-20261024": "sha256:f1f10ad1e6f31e1009c744a31281a33069bfe8ca1dd2c0dd3489e5a821a5a1d3",
+      "urumi-dashboard:disposable-pkg-20261024": "sha256:72c3233564d8ac84920e76748534cc5439d270b2505c58b08a305ebdc567436a",
+      "urumi-support-mcp:disposable-pkg-20261024": "sha256:e1f8735456f9f1528b3d768945785874a37191ac1a934c1b08924cfdf9d223b3",
+      "urumi-utility-mcp:disposable-pkg-20261024": "sha256:aa458e9a694bd7dc38e5c4ec515ecb752371716306e2b5e4055cb4fb953bdb19",
+      "urumi-woocommerce-mcp:disposable-pkg-20261024": "sha256:f5100088180f29b8b83257cdeeaadd1a1772e19074795645191d4b7a19ae809f",
+      "urumi-wordpress-woo:disposable-readiness-20261024": "sha256:a9137b31865af63b773bade56cba470f52fd70b24715bc83dfeb915c8c9c19ab"
+    },
+    "images_loaded_in_kind_node": false,
+    "helm_install": "not run"
+  }
+}

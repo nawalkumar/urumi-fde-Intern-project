@@ -1,0 +1,14 @@
+{
+  "base_image": "nginxinc/nginx-unprivileged:1.27-alpine",
+  "context": "dashboard",
+  "context_sha256": "cddf4768edc1f225748e687b0f980a0fe253a86c46ab082b0ae9b5c22fbc6e43",
+  "dirty": true,
+  "dockerfile": "dashboard/Dockerfile",
+  "image_id": "sha256:72c3233564d8ac84920e76748534cc5439d270b2505c58b08a305ebdc567436a",
+  "image_name": "urumi-dashboard",
+  "limits": "tracked_diff_sha256 hashes git diff HEAD and excludes untracked files. porcelain_sha256 hashes sorted status lines, not file contents. context_sha256 hashes the build-context paths and file bytes left after .dockerignore. None of these hashes reconstructs untracked file contents. dirty true means this build is not a clean reproduction of HEAD.",
+  "porcelain_sha256": "be4f9b052ca9f8f219017963a1a95f0a6776fcbda1e0309bfcc6b2bf44051629",
+  "revision": "b4b813c568ca70b45d28944a44de4e8e770f874d",
+  "tag": "urumi-dashboard:b4b813c568ca70b45d28944a44de4e8e770f874d-dirty",
+  "tracked_diff_sha256": "47747f49db411ae2146dec53553be01683aa67b2ec2bdfc179964beba9ca2604"
+}

@@ -1,0 +1,25 @@
+# Disposable cluster only.
+# Do not pass this file to kind-urumi-k8s-dev, kind-urumi-k8s-test, or the
+# existing urumi Helm release. The demo store stays disabled here so this
+# install does not create a second copy of it.
+store:
+  enabled: false
+networkPolicy:
+  enabled: true
+  allowExternalEgress: false
+storeProvisioner:
+  enabled: true
+  admit: true
+  allowPluginEgress: false
+  storageClass: local-path
+  ingressClass: nginx
+  ingressBaseDomain: stores.local
+  ingressNamespace: ingress-nginx
+  # Replaced by the acceptance run with the kind node address. A /32 is the
+  # kubelet probe source. It is not general database access.
+  probeCidrs: ""
+  images:
+    wordpress: urumi-wordpress-woo:disposable
+    mariadb: mariadb:11.4
+    wordpressCli: wordpress:cli-php8.2
+    woocommerceMcp: urumi-woocommerce-mcp:disposable

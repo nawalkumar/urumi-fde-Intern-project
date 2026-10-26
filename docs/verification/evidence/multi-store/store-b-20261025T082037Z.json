@@ -1,0 +1,459 @@
+{
+  "store_id": "174c75b6c0ef57e5",
+  "namespace": "st-174c75b6c0ef57e5",
+  "namespaceLabels": {
+    "urumi.dev/store-id": "174c75b6c0ef57e5",
+    "urumi.dev/owner-id": "169d3b25942f065b",
+    "urumi.dev/store": "true"
+  },
+  "ownershipLabels": {
+    "Deployment/woo-mcp": true,
+    "Deployment/wordpress": true,
+    "StatefulSet/store-db": true,
+    "Job/wordpress-init": true,
+    "Service/store-db": true,
+    "Service/woo-mcp": true,
+    "Service/wordpress": true,
+    "PersistentVolumeClaim/data-store-db-0": true,
+    "PersistentVolumeClaim/wordpress-data": true,
+    "Secret/store-db": true,
+    "Secret/woocommerce-credentials": true,
+    "ConfigMap/store-config": true,
+    "ConfigMap/store-init": true,
+    "ServiceAccount/store-workload": true,
+    "ResourceQuota/store": true,
+    "LimitRange/store": true,
+    "NetworkPolicy/default-deny": true,
+    "NetworkPolicy/store-db": true,
+    "NetworkPolicy/woo-mcp": true,
+    "NetworkPolicy/wordpress": true,
+    "NetworkPolicy/wordpress-init": true,
+    "Ingress/store": true
+  },
+  "pods": {
+    "store-db-0": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "woo-mcp-846d6f998d-c8pbx": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "wordpress-cbcb5db4c-vt54b": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "wordpress-init-h222s": {
+      "phase": "Succeeded",
+      "ready": false,
+      "restarts": 0
+    }
+  },
+  "pvcs": {
+    "data-store-db-0": {
+      "phase": "Bound",
+      "volume": "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7",
+      "storageClass": "standard",
+      "storeIdLabel": "174c75b6c0ef57e5",
+      "ownerIdLabel": "169d3b25942f065b"
+    },
+    "wordpress-data": {
+      "phase": "Bound",
+      "volume": "pvc-9cc41993-f39d-4f92-8204-7974b4546771",
+      "storageClass": "standard",
+      "storeIdLabel": "174c75b6c0ef57e5",
+      "ownerIdLabel": "169d3b25942f065b"
+    }
+  },
+  "wordpressProbes": {
+    "readiness": "/wp-includes/images/blank.gif",
+    "liveness": "/wp-includes/images/blank.gif"
+  },
+  "claimTemplateLabels": {
+    "app.kubernetes.io/component": "store-db",
+    "app.kubernetes.io/managed-by": "urumi-store-provisioner",
+    "app.kubernetes.io/name": "urumi-store",
+    "app.kubernetes.io/part-of": "urumi",
+    "urumi.dev/owner-id": "169d3b25942f065b",
+    "urumi.dev/store": "true",
+    "urumi.dev/store-id": "174c75b6c0ef57e5"
+  },
+  "quota": {
+    "hard": {
+      "limits.cpu": "4",
+      "limits.memory": "4Gi",
+      "persistentvolumeclaims": "2",
+      "pods": "8",
+      "requests.cpu": "2",
+      "requests.memory": "2Gi",
+      "services": "6"
+    },
+    "used": {
+      "limits.cpu": "1250m",
+      "limits.memory": "1280Mi",
+      "persistentvolumeclaims": "2",
+      "pods": "3",
+      "requests.cpu": "225m",
+      "requests.memory": "576Mi",
+      "services": "3"
+    }
+  },
+  "limitRange": [
+    {
+      "default": {
+        "cpu": "250m",
+        "memory": "256Mi"
+      },
+      "defaultRequest": {
+        "cpu": "25m",
+        "memory": "64Mi"
+      },
+      "max": {
+        "cpu": "1",
+        "memory": "768Mi"
+      },
+      "type": "Container"
+    }
+  ],
+  "networkPolicies": {
+    "default-deny": [
+      "Ingress",
+      "Egress"
+    ],
+    "store-db": [
+      "Ingress",
+      "Egress"
+    ],
+    "woo-mcp": [
+      "Ingress",
+      "Egress"
+    ],
+    "wordpress": [
+      "Ingress",
+      "Egress"
+    ],
+    "wordpress-init": [
+      "Ingress",
+      "Egress"
+    ]
+  },
+  "defaultDeny": {
+    "podSelector": {},
+    "ingress": null,
+    "egress": null
+  },
+  "secretKeys": {
+    "store-db": [
+      "MARIADB_PASSWORD",
+      "MARIADB_ROOT_PASSWORD",
+      "WORDPRESS_ADMIN_PASSWORD"
+    ],
+    "woocommerce-credentials": [
+      "WOOCOMMERCE_CONSUMER_KEY",
+      "WOOCOMMERCE_CONSUMER_SECRET"
+    ]
+  },
+  "ingressHost": "174c75b6c0ef57e5.stores.local",
+  "storeAInventoryUnchanged": true,
+  "storeAPods": {
+    "store-db-0": {
+      "ready": true,
+      "restarts": 0
+    },
+    "woo-mcp-7dd7d99f84-wmzx6": {
+      "ready": true,
+      "restarts": 0
+    },
+    "wordpress-6f865867bb-qscb6": {
+      "ready": true,
+      "restarts": 0
+    },
+    "wordpress-init-582v9": {
+      "ready": false,
+      "restarts": 0
+    }
+  },
+  "previousPvsUnchanged": true,
+  "newPvs": {
+    "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7": {
+      "phase": "Bound",
+      "claim": "st-174c75b6c0ef57e5/data-store-db-0"
+    },
+    "pvc-9cc41993-f39d-4f92-8204-7974b4546771": {
+      "phase": "Bound",
+      "claim": "st-174c75b6c0ef57e5/wordpress-data"
+    }
+  },
+  "namespaceChange": [
+    "st-174c75b6c0ef57e5"
+  ],
+  "baselinePods": {
+    "urumi-dashboard-dd8969595-zcs7b": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-gateway-7d5dd886cc-jn59v": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-gateway-db-0": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-store-db-0": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-store-provisioner-5cd656df79-8f677": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-support-mcp-656b8f8b89-dwmnj": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-utility-mcp-86796cd486-dh2f4": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-woocommerce-mcp-647ddfb9b4-jctbl": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-wordpress-f76c57df5-j7l62": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-wordpress-init-znvkv": {
+      "phase": "Succeeded",
+      "ready": false,
+      "restarts": 0
+    }
+  },
+  "helmRevision": 7,
+  "api": {
+    "stores": [
+      [
+        "174c75b6c0ef57e5",
+        "acceptance-store-b",
+        "Ready",
+        "st-174c75b6c0ef57e5",
+        "http://174c75b6c0ef57e5.stores.local",
+        0,
+        [
+          "store_174c75b6c0ef57e5__list_orders",
+          "store_174c75b6c0ef57e5__get_order",
+          "store_174c75b6c0ef57e5__list_products",
+          "store_174c75b6c0ef57e5__create_product",
+          "store_174c75b6c0ef57e5__update_order_status",
+          "store_174c75b6c0ef57e5__create_order"
+        ]
+      ],
+      [
+        "c4421147ea825bbc",
+        "acceptance-store-a",
+        "Ready",
+        "st-c4421147ea825bbc",
+        "http://c4421147ea825bbc.stores.local",
+        0,
+        [
+          "store_c4421147ea825bbc__list_orders",
+          "store_c4421147ea825bbc__get_order",
+          "store_c4421147ea825bbc__list_products",
+          "store_c4421147ea825bbc__create_product",
+          "store_c4421147ea825bbc__update_order_status",
+          "store_c4421147ea825bbc__create_order"
+        ]
+      ]
+    ],
+    "upstreams": [
+      [
+        "store_174c75b6c0ef57e5",
+        "dynamic",
+        "http://woo-mcp.st-174c75b6c0ef57e5.svc.cluster.local:8000/mcp",
+        true,
+        false,
+        "listing_ok",
+        6,
+        [
+          "store_174c75b6c0ef57e5__create_order",
+          "store_174c75b6c0ef57e5__create_product",
+          "store_174c75b6c0ef57e5__get_order",
+          "store_174c75b6c0ef57e5__list_orders",
+          "store_174c75b6c0ef57e5__list_products",
+          "store_174c75b6c0ef57e5__update_order_status"
+        ]
+      ],
+      [
+        "store_c4421147ea825bbc",
+        "dynamic",
+        "http://woo-mcp.st-c4421147ea825bbc.svc.cluster.local:8000/mcp",
+        true,
+        false,
+        "listing_ok",
+        6,
+        [
+          "store_c4421147ea825bbc__create_order",
+          "store_c4421147ea825bbc__create_product",
+          "store_c4421147ea825bbc__get_order",
+          "store_c4421147ea825bbc__list_orders",
+          "store_c4421147ea825bbc__list_products",
+          "store_c4421147ea825bbc__update_order_status"
+        ]
+      ]
+    ],
+    "keys": [
+      [
+        "03ab04ae83ba0191",
+        "169d3b25942f065b",
+        [
+          "store_c4421147ea825bbc__list_orders"
+        ]
+      ],
+      [
+        "40ab7159b6c06f90",
+        null,
+        []
+      ]
+    ],
+    "audit": [
+      [
+        "2026-10-25T08:19:25.824768+00:00",
+        "admin:provision_store",
+        "success",
+        "174c75b6c0ef57e5"
+      ],
+      [
+        "2026-10-25T08:18:02.903629+00:00",
+        "admin:create_store",
+        "success",
+        "174c75b6c0ef57e5"
+      ],
+      [
+        "2026-10-25T07:17:47.734977+00:00",
+        "admin:provision_store",
+        "success",
+        "c4421147ea825bbc"
+      ],
+      [
+        "2026-10-25T07:11:56.444270+00:00",
+        "admin:retry_store",
+        "success",
+        "c4421147ea825bbc"
+      ]
+    ]
+  },
+  "hostAvailableMiB": 2354,
+  "testNodeDocker": "3.202GiB / 7.58GiB",
+  "poll": [
+    {
+      "t": 7,
+      "state": "Provisioning",
+      "phase": "namespace",
+      "attempt": 0,
+      "progress": "Creating the store namespace.",
+      "error": null,
+      "availMiB": 2473,
+      "node": "3.087GiB / 7.58GiB",
+      "storeBPods": [
+        "store-db-0:Running",
+        "woo-mcp-846d6f998d-c8pbx:Running",
+        "wordpress-cbcb5db4c-vt54b:Running",
+        "wordpress-init-h222s:Running"
+      ],
+      "unready": [],
+      "restartsNonzero": {},
+      "unexpectedNs": []
+    },
+    {
+      "t": 27,
+      "state": "Provisioning",
+      "phase": "namespace",
+      "attempt": 0,
+      "progress": "Creating the store namespace.",
+      "error": null,
+      "availMiB": 2392,
+      "node": "3.157GiB / 7.58GiB",
+      "storeBPods": [
+        "store-db-0:Running",
+        "woo-mcp-846d6f998d-c8pbx:Running",
+        "wordpress-cbcb5db4c-vt54b:Running",
+        "wordpress-init-h222s:Running"
+      ],
+      "unready": [],
+      "restartsNonzero": {},
+      "unexpectedNs": []
+    },
+    {
+      "t": 47,
+      "state": "Provisioning",
+      "phase": "namespace",
+      "attempt": 0,
+      "progress": "Creating the store namespace.",
+      "error": null,
+      "availMiB": 2285,
+      "node": "3.214GiB / 7.58GiB",
+      "storeBPods": [
+        "store-db-0:Running",
+        "woo-mcp-846d6f998d-c8pbx:Running",
+        "wordpress-cbcb5db4c-vt54b:Running",
+        "wordpress-init-h222s:Running"
+      ],
+      "unready": [],
+      "restartsNonzero": {},
+      "unexpectedNs": []
+    },
+    {
+      "t": 68,
+      "state": "Provisioning",
+      "phase": "waiting",
+      "attempt": 0,
+      "progress": "Waiting for the store workloads.",
+      "error": null,
+      "availMiB": 2370,
+      "node": "3.167GiB / 7.58GiB",
+      "storeBPods": [
+        "store-db-0:Running",
+        "woo-mcp-846d6f998d-c8pbx:Running",
+        "wordpress-cbcb5db4c-vt54b:Running",
+        "wordpress-init-h222s:Succeeded"
+      ],
+      "unready": [],
+      "restartsNonzero": {},
+      "unexpectedNs": []
+    },
+    {
+      "t": 87,
+      "state": "Ready",
+      "phase": "ready",
+      "attempt": 0,
+      "progress": "The store is ready.",
+      "error": null,
+      "availMiB": 2346,
+      "node": "3.176GiB / 7.58GiB",
+      "storeBPods": [
+        "store-db-0:Running",
+        "woo-mcp-846d6f998d-c8pbx:Running",
+        "wordpress-cbcb5db4c-vt54b:Running",
+        "wordpress-init-h222s:Succeeded"
+      ],
+      "unready": [],
+      "restartsNonzero": {},
+      "unexpectedNs": []
+    }
+  ],
+  "generatedAt": "20261025T082037Z",
+  "sessionNote": "admin session renewed with 'provision reset-admin-password' (password kept inside the gateway pod, file removed); no API key or grant was created"
+}

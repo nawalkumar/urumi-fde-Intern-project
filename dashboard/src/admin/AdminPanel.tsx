@@ -1,4 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
+import { useShellSlots } from "../shellSlots";
 import { adminRequest, errorText } from "./adminClient";
 import { ChatPanel } from "./ChatPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
@@ -33,6 +35,22 @@ function serverStatus(row: UpstreamRow): "Connected" | "Unreachable" | "Disabled
   return "Unreachable";
 }
 
+const SERVER_STATUS_CLASS: Record<ReturnType<typeof serverStatus>, string> = {
+  Connected: "state state-ok",
+  Unreachable: "state state-failed",
+  Disabled: "state state-disabled",
+};
+
+function outcomeClass(outcome: string): string {
+  if (outcome === "success") {
+    return "state state-ok";
+  }
+  if (outcome === "error" || outcome === "timeout" || outcome === "upstream_failure" || outcome === "unauthorized") {
+    return "state state-failed";
+  }
+  return "state state-disabled";
+}
+
 type DiagnosticRow = {
   code: string;
   message: string;
@@ -65,11 +83,14 @@ export function AdminPanel() {
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
-      <section className="admin-panel" aria-label="Team administration">
+      <section id="team-administration" className="admin-panel" aria-label="Team administration">
         <h2>Team administration</h2>
-        <button type="button" onClick={() => setOpen(true)}>
-          Open team administration
-        </button>
+        <div className="panel admin-gate">
+          <p className="hint">Stores, upstreams, discovery, members, chat, API keys, and audit history need a team sign-in.</p>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open team administration
+          </button>
+        </div>
       </section>
     );
   }
@@ -77,6 +98,7 @@ export function AdminPanel() {
 }
 
 function AdminSession() {
+  const { session: sessionSlot } = useShellSlots();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -101,20 +123,30 @@ function AdminSession() {
     setNotice(null);
   }
 
+  const sessionBar = user ? (
+    <div className="session-bar">
+      <p>
+        Signed in as {user.username} ({user.role}).
+      </p>
+      <button type="button" className="btn-secondary btn-sm" onClick={() => void logout()}>
+        Sign out
+      </button>
+    </div>
+  ) : null;
+
   return (
-    <section className="admin-panel" aria-label="Team administration">
+    <section id="team-administration" className="admin-panel" aria-label="Team administration">
       <h2>Team administration</h2>
       {!ready ? <p>Checking session…</p> : null}
       {ready && user === null ? <LoginForm onSignedIn={setUser} /> : null}
       {user ? (
         <>
-          <p>
-            Signed in as {user.username} ({user.role}).
-          </p>
-          <button type="button" onClick={() => void logout()}>
-            Sign out
-          </button>
-          {notice ? <p role="status">{notice}</p> : null}
+          {sessionSlot && sessionBar ? createPortal(sessionBar, sessionSlot) : sessionBar}
+          {notice ? (
+            <p role="status" className="admin-notice">
+              {notice}
+            </p>
+          ) : null}
           <StorePanel />
           {user.role === "admin" ? <UpstreamManager onNotice={setNotice} /> : null}
           {user.role === "admin" ? <DiscoveryPanel /> : null}
@@ -148,7 +180,7 @@ function LoginForm({ onSignedIn }: { onSignedIn: (user: SessionUser) => void }) 
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)}>
+    <form className="panel login-card" onSubmit={(event) => void submit(event)}>
       <label>
         Username
         <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
@@ -225,62 +257,70 @@ function UpstreamManager({ onNotice }: { onNotice: (message: string) => void }) 
   }
 
   return (
-    <section>
-      <h3>Upstreams</h3>
-      <button type="button" onClick={() => void load()}>
-        Refresh upstreams
-      </button>
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Id</th>
-            <th>URL</th>
-            <th>Status</th>
-            <th>Tools</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td>
-                {row.id} ({row.source})
-              </td>
-              <td>
-                {row.source === "dynamic" ? (
-                  <input
-                    aria-label={`URL for ${row.id}`}
-                    value={editUrl[row.id] ?? row.url}
-                    onChange={(event) => setEditUrl({ ...editUrl, [row.id]: event.target.value })}
-                  />
-                ) : (
-                  row.url
-                )}
-              </td>
-              <td>
-                {serverStatus(row)}
-                {row.has_credential ? " / credential stored" : ""}
-              </td>
-              <td>{row.tools.join(", ") || "none registered"}</td>
-              <td>
-                <button type="button" onClick={() => void save(row, !row.enabled)}>
-                  {row.enabled ? `Disable ${row.id}` : `Enable ${row.id}`}
-                </button>
-                {row.source === "dynamic" ? (
-                  <>
-                    <button type="button" onClick={() => void save(row, row.enabled)}>
-                      Save {row.id}
-                    </button>
-                    <button type="button" onClick={() => void remove(row)}>
-                      Remove {row.id}
-                    </button>
-                  </>
-                ) : null}
-              </td>
+    <section id="upstreams" className="panel">
+      <div className="section-head">
+        <h3>Upstreams</h3>
+        <button type="button" className="btn-secondary btn-sm" onClick={() => void load()}>
+          Refresh upstreams
+        </button>
+      </div>
+      <div className="table-wrap" role="region" aria-label="Upstreams table" tabIndex={0}>
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th scope="col">Id</th>
+              <th scope="col">URL</th>
+              <th scope="col">Status</th>
+              <th scope="col">Tools</th>
+              <th scope="col">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td className="mono">
+                  {row.id} ({row.source})
+                </td>
+                <td className="mono cell-wrap">
+                  {row.source === "dynamic" ? (
+                    <input
+                      aria-label={`URL for ${row.id}`}
+                      value={editUrl[row.id] ?? row.url}
+                      onChange={(event) => setEditUrl({ ...editUrl, [row.id]: event.target.value })}
+                    />
+                  ) : (
+                    row.url
+                  )}
+                </td>
+                <td>
+                  <span className={SERVER_STATUS_CLASS[serverStatus(row)]}>{serverStatus(row)}</span>
+                  {row.has_credential ? " / credential stored" : ""}
+                </td>
+                <td className="mono cell-wrap">{row.tools.join(", ") || "none registered"}</td>
+                <td>
+                  <div className="row-actions">
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => void save(row, !row.enabled)}>
+                      {row.enabled ? `Disable ${row.id}` : `Enable ${row.id}`}
+                    </button>
+                    {row.source === "dynamic" ? (
+                      <>
+                        <button type="button" className="btn-secondary btn-sm" onClick={() => void save(row, row.enabled)}>
+                          Save {row.id}
+                        </button>
+                        <button type="button" className="btn-danger btn-sm" onClick={() => void remove(row)}>
+                          Remove {row.id}
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <section aria-labelledby="upstream-diagnostics-heading">
         <h4 id="upstream-diagnostics-heading">Diagnostics</h4>
         {diagnostics.length === 0 ? (
@@ -298,7 +338,7 @@ function UpstreamManager({ onNotice }: { onNotice: (message: string) => void }) 
           </ul>
         )}
       </section>
-      <form onSubmit={(event) => void add(event)}>
+      <form className="inset-form" onSubmit={(event) => void add(event)}>
         <h4>Add upstream</h4>
         <label>
           Upstream id
@@ -369,44 +409,62 @@ function MemberManager({ onNotice }: { onNotice: (message: string) => void }) {
   }
 
   return (
-    <section>
-      <h3>Members</h3>
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Role</th>
-            <th>State</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((member) => (
-            <tr key={member.user_id}>
-              <td>{member.username}</td>
-              <td>{member.role}</td>
-              <td>{member.disabled ? "disabled" : "active"}</td>
-              <td>
-                <button type="button" onClick={() => void setMemberRole(member, member.role === "admin" ? "member" : "admin")}>
-                  Make {member.username} {member.role === "admin" ? "member" : "admin"}
-                </button>
-                <button type="button" onClick={() => void setDisabled(member, !member.disabled)}>
-                  {member.disabled ? `Enable ${member.username}` : `Disable ${member.username}`}
-                </button>
-              </td>
+    <section id="members" className="panel">
+      <div className="section-head">
+        <h3>Members</h3>
+      </div>
+      <div className="table-wrap" role="region" aria-label="Members table" tabIndex={0}>
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th scope="col">Username</th>
+              <th scope="col">Role</th>
+              <th scope="col">State</th>
+              <th scope="col">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((member) => (
+              <tr key={member.user_id}>
+                <td>{member.username}</td>
+                <td>
+                  <span className={member.role === "admin" ? "state state-role-admin" : "state state-disabled"}>{member.role}</span>
+                </td>
+                <td>
+                  <span className={member.disabled ? "state state-disabled" : "state state-ok"}>
+                    {member.disabled ? "disabled" : "active"}
+                  </span>
+                </td>
+                <td>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => void setMemberRole(member, member.role === "admin" ? "member" : "admin")}
+                    >
+                      Make {member.username} {member.role === "admin" ? "member" : "admin"}
+                    </button>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => void setDisabled(member, !member.disabled)}>
+                      {member.disabled ? `Enable ${member.username}` : `Disable ${member.username}`}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {initialPassword ? (
         <div className="secret-once" role="status">
           <p>Initial password, shown once: {initialPassword}</p>
-          <button type="button" onClick={() => setInitialPassword(null)}>
+          <button type="button" className="btn-secondary btn-sm" onClick={() => setInitialPassword(null)}>
             Dismiss password
           </button>
         </div>
       ) : null}
-      <form onSubmit={(event) => void create(event)}>
+      <form className="inset-form" onSubmit={(event) => void create(event)}>
         <label>
           New username
           <input value={username} onChange={(event) => setUsername(event.target.value)} />
@@ -504,71 +562,89 @@ function KeyManager({ actor, onNotice }: { actor: SessionUser; onNotice: (messag
   }
 
   return (
-    <section>
-      <h3>API keys</h3>
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Key id</th>
-            <th>User</th>
-            <th>Permissions</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {newestFirst(rows).map((row) => (
-            <tr key={row.key_id} className={row.key_id === highlightId ? "key-row-new" : undefined}>
-              <td>
-                {row.key_id}
-                {row.revoked ? " (revoked)" : ""}
-                {row.key_id === highlightId ? " New" : ""}
-              </td>
-              <td>{keyOwnerLabel(row, users)}</td>
-              <td>
-                {row.permissions.map((permission) => (
-                  <span key={permission}>
-                    {permission}{" "}
-                    {actor.role === "admin" && !row.revoked ? (
-                      <button type="button" onClick={() => void revokePermission(row.key_id, permission)}>
-                        Remove {permission}
-                      </button>
-                    ) : null}
-                  </span>
-                ))}
-              </td>
-              <td>
-                {row.revoked ? null : (
-                  <button type="button" onClick={() => void revoke(row.key_id)}>
-                    Revoke {row.key_id}
-                  </button>
-                )}
-                {actor.role === "admin" && !row.revoked ? (
-                  <>
-                    <input
-                      aria-label={`Permission for ${row.key_id}`}
-                      value={grants[row.key_id] ?? ""}
-                      onChange={(event) => setGrants({ ...grants, [row.key_id]: event.target.value })}
-                    />
-                    <button type="button" onClick={() => void grant(row.key_id)}>
-                      Grant {row.key_id}
-                    </button>
-                  </>
-                ) : null}
-              </td>
+    <section id="api-keys" className="panel">
+      <div className="section-head">
+        <h3>API keys</h3>
+      </div>
+      <div className="table-wrap" role="region" aria-label="API keys table" tabIndex={0}>
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th scope="col">Key id</th>
+              <th scope="col">User</th>
+              <th scope="col">Permissions</th>
+              <th scope="col">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {newestFirst(rows).map((row) => (
+              <tr
+                key={row.key_id}
+                className={[row.key_id === highlightId ? "key-row-new" : "", row.revoked ? "key-row-revoked" : ""].join(" ").trim() || undefined}
+              >
+                <td className="mono">
+                  {row.key_id}
+                  {row.revoked ? " (revoked)" : ""}
+                  {row.key_id === highlightId ? " New" : ""}
+                </td>
+                <td className="cell-wrap">{keyOwnerLabel(row, users)}</td>
+                <td>
+                  <div className="permission-list">
+                    {row.permissions.map((permission) => (
+                      <span key={permission} className="permission">
+                        {permission}{" "}
+                        {actor.role === "admin" && !row.revoked ? (
+                          <button
+                            type="button"
+                            className="btn-danger btn-xs"
+                            onClick={() => void revokePermission(row.key_id, permission)}
+                          >
+                            Remove {permission}
+                          </button>
+                        ) : null}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td>
+                  <div className="row-actions">
+                    {row.revoked ? null : (
+                      <button type="button" className="btn-danger btn-sm" onClick={() => void revoke(row.key_id)}>
+                        Revoke {row.key_id}
+                      </button>
+                    )}
+                    {actor.role === "admin" && !row.revoked ? (
+                      <div className="inline-field">
+                        <input
+                          aria-label={`Permission for ${row.key_id}`}
+                          value={grants[row.key_id] ?? ""}
+                          onChange={(event) => setGrants({ ...grants, [row.key_id]: event.target.value })}
+                        />
+                        <button type="button" className="btn-secondary btn-sm" onClick={() => void grant(row.key_id)}>
+                          Grant {row.key_id}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {issued ? (
         <div className="secret-once" role="status">
           <p>API key, shown once: {issued}</p>
-          <button type="button" onClick={() => setIssued(null)}>
+          <button type="button" className="btn-secondary btn-sm" onClick={() => setIssued(null)}>
             Dismiss API key
           </button>
         </div>
       ) : null}
       {actor.role === "member" ? (
         <form
+          className="inset-form"
           onSubmit={(event) => {
             event.preventDefault();
             void issueFor(actor.user_id);
@@ -578,7 +654,7 @@ function KeyManager({ actor, onNotice }: { actor: SessionUser; onNotice: (messag
         </form>
       ) : null}
       {actor.role === "admin" ? (
-        <form onSubmit={(event) => void issue(event)}>
+        <form className="inset-form" onSubmit={(event) => void issue(event)}>
           <label htmlFor="key-owner">
             User for new key
             <select
@@ -608,6 +684,7 @@ function KeyManager({ actor, onNotice }: { actor: SessionUser; onNotice: (messag
 }
 
 function AuditHistory() {
+  const { auditSummary } = useShellSlots();
   const [rows, setRows] = useState<AuditRow[]>([]);
 
   async function load() {
@@ -621,42 +698,75 @@ function AuditHistory() {
     void load();
   }, []);
 
+  const newest = mostRecent(rows);
+
   return (
-    <section>
-      <h3>Audit history</h3>
-      <button type="button" onClick={() => void load()}>
-        Refresh audit
-      </button>
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>When</th>
-            <th>Actor</th>
-            <th>User</th>
-            <th>Upstream</th>
-            <th>Tool</th>
-            <th>Target</th>
-            <th>Duration</th>
-            <th>Outcome</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={`${row.occurred_at}-${row.actor}-${index}`}>
-              <td>{row.occurred_at}</td>
-              <td>{row.actor}</td>
-              <td>{row.user_id ?? ""}</td>
-              <td>{row.upstream_id ?? ""}</td>
-              <td>{row.tool_name}</td>
-              <td>{row.target ?? ""}</td>
-              <td>{row.duration_ms === null ? "" : `${row.duration_ms} ms`}</td>
-              <td>{row.outcome}</td>
+    <section id="audit-history" className="panel">
+      <div className="section-head">
+        <h3>Audit history</h3>
+        <button type="button" className="btn-secondary btn-sm" onClick={() => void load()}>
+          Refresh audit
+        </button>
+      </div>
+      <div className="table-wrap" role="region" aria-label="Audit history table" tabIndex={0}>
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Actor</th>
+              <th scope="col">User</th>
+              <th scope="col">Upstream</th>
+              <th scope="col">Tool</th>
+              <th scope="col">Target</th>
+              <th scope="col">Duration</th>
+              <th scope="col">Outcome</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${row.occurred_at}-${row.actor}-${index}`}>
+                <td className="nowrap">{row.occurred_at}</td>
+                <td className="mono">{row.actor}</td>
+                <td className="mono">{row.user_id ?? ""}</td>
+                <td>{row.upstream_id ?? ""}</td>
+                <td className="mono cell-wrap">{row.tool_name}</td>
+                <td className="cell-wrap">{row.target ?? ""}</td>
+                <td className="numeric">{row.duration_ms === null ? "" : `${row.duration_ms} ms`}</td>
+                <td>
+                  <span className={outcomeClass(row.outcome)}>{row.outcome}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {auditSummary
+        ? createPortal(
+            <>
+              <p className="summary-value">{rows.length}</p>
+              <p className="summary-detail">
+                {rows.length === 1 ? "Entry" : "Entries"} shown in Audit history for this account.
+                {newest ? ` Most recent: ${newest}.` : ""}
+              </p>
+            </>,
+            auditSummary,
+          )
+        : null}
     </section>
   );
+}
+
+function mostRecent(rows: AuditRow[]): string | null {
+  let best: string | null = null;
+  let bestTime = Number.NEGATIVE_INFINITY;
+  for (const row of rows) {
+    const time = Date.parse(row.occurred_at);
+    if (!Number.isNaN(time) && time > bestTime) {
+      bestTime = time;
+      best = row.occurred_at;
+    }
+  }
+  return best;
 }
 
 function newestFirst(rows: KeyRow[]): KeyRow[] {

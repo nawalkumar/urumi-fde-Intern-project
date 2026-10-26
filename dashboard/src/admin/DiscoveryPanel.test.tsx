@@ -31,7 +31,9 @@ test("discovery panel shows an empty summary", async () => {
   expect(screen.getByText("Loading discovery…")).toBeInTheDocument();
   expect(await screen.findByText("No upstreams registered.")).toBeInTheDocument();
   expect(screen.getByText("No tool-name collisions.")).toBeInTheDocument();
-  expect(screen.getByText(/Candidates 0/)).toBeInTheDocument();
+  expect(screen.getByText(/Candidates 0/)).toHaveTextContent("No client discovery recorded since the gateway started.");
+  expect(screen.queryByText(/Last client discovery/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/No discovery refresh recorded/)).not.toBeInTheDocument();
 });
 
 test("discovery panel shows a collision and a search explanation", async () => {
@@ -71,6 +73,9 @@ test("discovery panel shows a collision and a search explanation", async () => {
   render(<DiscoveryPanel />);
   expect(await screen.findByText(/dup__echo excluded/)).toBeInTheDocument();
   expect(screen.getByText("collision: 1")).toBeInTheDocument();
+  expect(screen.getByText(/Candidates 2/)).toHaveTextContent("Last client discovery 2026-10-20T00:00:00+00:00.");
+  expect(screen.queryByText(/Last refresh/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/No client discovery recorded/)).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("not pinned");
   await user.type(screen.getByLabelText("Search advertised tools"), "convert");
   await user.click(screen.getByRole("button", { name: "Search tools" }));

@@ -16,6 +16,7 @@ dashboard/dist/
 dashboard/coverage/
 helm/urumi/values-local.yaml
 helm/urumi/values-vps.local.yaml
+helm/urumi/values-kind-urumi-k8s-test.local.yaml
 helm/urumi/*-secrets.yaml
 *.log
 *.pem

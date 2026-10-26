@@ -1,8 +1,8 @@
 """Decide whether a public tool name may be advertised or called for a store.
 
 Non-store tools are left to the existing grant check. A store tool is allowed
-only when that exact upstream id belongs to a Ready store. The tool name is
-the tenant selector. A display name is not.
+only when the trusted caller owns that Ready store. The tool name is the
+tenant selector. A display name is not. An empty caller id fails closed.
 """
 
 from apps.gateway.app.keys import StoreUnavailable
@@ -24,12 +24,13 @@ def store_id_from_tool(tool: str) -> str | None:
     return store_id
 
 
-async def store_block_reason(store: object | None, tool: str) -> str | None:
+async def store_block_reason(store: object | None, tool: str, *, owner_user_id: str) -> str | None:
     """Return why a store tool is unavailable, or None when it may be used.
 
-    A non-store tool returns None. A store tool is allowed only when the store
-    is Ready and the saved upstream is enabled at that store's canonical MCP URL.
-    The URL itself is not returned.
+    A non-store tool returns None. A store tool is allowed only when the
+    trusted caller owns that store, the store is Ready, and the saved upstream
+    is enabled at that store's canonical MCP URL. The URL and owner id are not
+    returned. An empty caller id fails closed.
     """
     store_id = store_id_from_tool(tool)
     if store_id is None:
@@ -40,7 +41,11 @@ async def store_block_reason(store: object | None, tool: str) -> str | None:
         record = await get_store(store, store_id)
     except StoreUnavailable:
         return "store_unavailable"
-    if record is None or record.state != "ready":
+    if record is None:
+        return "store_not_ready"
+    if not owner_user_id or record.owner_user_id != owner_user_id:
+        return "store_not_owner"
+    if record.state != "ready":
         return "store_not_ready"
     if record.upstream_id != upstream_id_for(store_id):
         return "store_upstream_mismatch"
@@ -57,5 +62,5 @@ async def store_block_reason(store: object | None, tool: str) -> str | None:
     return None
 
 
-async def store_call_allowed(store: object | None, tool: str) -> bool:
-    return await store_block_reason(store, tool) is None
+async def store_call_allowed(store: object | None, tool: str, *, owner_user_id: str) -> bool:
+    return await store_block_reason(store, tool, owner_user_id=owner_user_id) is None

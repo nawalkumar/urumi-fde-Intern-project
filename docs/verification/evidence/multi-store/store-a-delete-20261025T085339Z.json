@@ -1,0 +1,394 @@
+{
+  "generatedAt": "20261025T085339Z",
+  "context": "kind-urumi-k8s-test",
+  "helmRevision": 7,
+  "approvedDeviation": "user approved one replacement Store B key and revocation of unusable key bfca9a84d7b4380d",
+  "keyHandling": "raw value of 013b6aeafe9ea69c kept only in /tmp/urumi-store-b-key (mode 600, user urumi) inside the gateway pod; never printed or copied out",
+  "liveWrites": [
+    "POST /admin/keys user_id=169d3b25942f065b -> 201 013b6aeafe9ea69c",
+    "POST /admin/keys/013b6aeafe9ea69c/permissions store_174c75b6c0ef57e5__list_orders -> 200",
+    "POST /admin/keys/bfca9a84d7b4380d/revoke -> 200",
+    "POST /admin/stores/c4421147ea825bbc/delete -> 202 (sent once)"
+  ],
+  "preDelete": {
+    "storeBToolsList": [
+      "store_174c75b6c0ef57e5__list_orders"
+    ],
+    "storeBListOrders": "success (audit 08:50:43Z and 08:50:59Z)",
+    "snapshot": {
+      "storeAObjects": 28,
+      "storeBObjects": 28,
+      "pvs": {
+        "pvc-00ba996f-ea68-4f44-ab5d-26184b9201c7": {
+          "claim": "st-c4421147ea825bbc/wordpress-data",
+          "phase": "Bound",
+          "reclaim": "Delete",
+          "uid": "fcaca804-38de-4d2d-8e83-f4fb468eb7a8"
+        },
+        "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a": {
+          "claim": "default/urumi-wordpress-data",
+          "phase": "Bound",
+          "reclaim": "Delete",
+          "uid": "6a037645-63d2-4b8d-a31a-238ae82e8f9a"
+        },
+        "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7": {
+          "claim": "st-174c75b6c0ef57e5/data-store-db-0",
+          "phase": "Bound",
+          "reclaim": "Delete",
+          "uid": "c4ccd52f-9a22-4a10-8d01-18dcbd8bcb70"
+        },
+        "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971": {
+          "claim": "default/data-urumi-gateway-db-0",
+          "phase": "Bound",
+          "reclaim": "Delete",
+          "uid": "628922d8-86de-4376-8b35-d1cf0d742612"
+        },
+        "pvc-8ca68528-e380-4896-a925-335cafddda34": {
+          "claim": "default/data-urumi-store-db-0",
+          "phase": "Bound",
+          "reclaim": "Delete",
+          "uid": "222f7492-3a34-4c54-977c-e4d53286d057"
+        },
+        "pvc-9cc41993-f39d-4f92-8204-7974b4546771": {
+          "claim": "st-174c75b6c0ef57e5/wordpress-data",
+          "phase": "Bound",
+          "reclaim": "Delete",
+          "uid": "4705b147-bd03-4ba0-a28d-7ffd12454f61"
+        },
+        "pvc-cfec2069-30de-43ee-b62f-7f02c16a7aa3": {
+          "claim": "st-c4421147ea825bbc/data-store-db-0",
+          "phase": "Bound",
+          "reclaim": "Delete",
+          "uid": "eeae35b0-3e7b-4373-8aa1-d22aed98f0b1"
+        }
+      },
+      "storageClassReclaim": "Delete"
+    }
+  },
+  "deleteSemantics": "request_delete marks the row deleting, revokes grants LIKE store\\_<id>\\_\\_%, deletes upstream store_<id>; provisioner deletes namespace only if name is st-<16 hex> and store-id label matches, waits for absence, then deletes only Released/Failed/Available PVs whose claimRef.namespace is that namespace",
+  "poll": [
+    {
+      "t": 5,
+      "state": "Deleting",
+      "phase": "terminating",
+      "progress": "Namespace deletion will be retried.",
+      "deletion_complete": false,
+      "attempt": 7,
+      "error": "That store could not be deleted.",
+      "nsA": "Terminating",
+      "pvCount": 7,
+      "unready": [],
+      "restarts": 0,
+      "unexpectedNs": [],
+      "availMiB": 2477,
+      "node": "3.045GiB / 7.58GiB"
+    },
+    {
+      "t": 21,
+      "state": "Deleting",
+      "phase": "terminating",
+      "progress": "Namespace deletion will be retried.",
+      "deletion_complete": false,
+      "attempt": 15,
+      "error": "That store could not be deleted.",
+      "nsA": "Terminating",
+      "pvCount": 7,
+      "unready": [],
+      "restarts": 0,
+      "unexpectedNs": [],
+      "availMiB": 2450,
+      "node": "3.044GiB / 7.58GiB"
+    },
+    {
+      "t": 37,
+      "state": "Deleted",
+      "phase": "deleted",
+      "progress": "The store has been deleted.",
+      "deletion_complete": true,
+      "attempt": 16,
+      "error": null,
+      "nsA": "absent",
+      "pvCount": 5,
+      "unready": [],
+      "restarts": 0,
+      "unexpectedNs": [],
+      "availMiB": 2487,
+      "node": "3.049GiB / 7.58GiB"
+    }
+  ],
+  "finding": "While the namespace was terminating (about 30 s), each reconcile pass incremented attempt (7 to 16) and set error 'That store could not be deleted.' once attempt passed max_attempts. The row stayed Deleting and completed to Deleted. The message is misleading during normal termination.",
+  "post": {
+    "storeANamespace": "absent",
+    "pvsRemoved": {
+      "pvc-00ba996f-ea68-4f44-ab5d-26184b9201c7": "st-c4421147ea825bbc/wordpress-data",
+      "pvc-cfec2069-30de-43ee-b62f-7f02c16a7aa3": "st-c4421147ea825bbc/data-store-db-0"
+    },
+    "pvsRemaining": {
+      "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a": "default/urumi-wordpress-data Bound",
+      "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7": "st-174c75b6c0ef57e5/data-store-db-0 Bound",
+      "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971": "default/data-urumi-gateway-db-0 Bound",
+      "pvc-8ca68528-e380-4896-a925-335cafddda34": "default/data-urumi-store-db-0 Bound",
+      "pvc-9cc41993-f39d-4f92-8204-7974b4546771": "st-174c75b6c0ef57e5/wordpress-data Bound"
+    },
+    "remainingPvsUnchanged": true,
+    "pvsReferencingStoreA": [],
+    "storeBObjectsUnchanged": true,
+    "storeBPods": {
+      "store-db-0": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "woo-mcp-846d6f998d-c8pbx": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "wordpress-cbcb5db4c-vt54b": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "wordpress-init-h222s": {
+        "ready": false,
+        "restarts": 0,
+        "phase": "Succeeded"
+      }
+    },
+    "namespacesOtherThanAUnchanged": true,
+    "defaultObjectsUnchanged": true,
+    "baselinePods": {
+      "urumi-dashboard-dd8969595-zcs7b": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-gateway-7d5dd886cc-jn59v": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-gateway-db-0": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-store-db-0": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-store-provisioner-5cd656df79-8f677": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-support-mcp-656b8f8b89-dwmnj": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-utility-mcp-86796cd486-dh2f4": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-woocommerce-mcp-647ddfb9b4-jctbl": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-wordpress-f76c57df5-j7l62": {
+        "ready": true,
+        "restarts": 0,
+        "phase": "Running"
+      },
+      "urumi-wordpress-init-znvkv": {
+        "ready": false,
+        "restarts": 0,
+        "phase": "Succeeded"
+      }
+    },
+    "helmRevision": 7,
+    "storeA": {
+      "http": 200,
+      "state": "Deleted",
+      "phase": "deleted",
+      "deletion_complete": true,
+      "tool_names": [],
+      "url": null
+    },
+    "storeAGet": {
+      "http": 200,
+      "state": "Deleted"
+    },
+    "listedStores": [
+      [
+        "174c75b6c0ef57e5",
+        "Ready"
+      ]
+    ],
+    "upstreams": [
+      [
+        "woocommerce",
+        "http://urumi-woocommerce-mcp:8000/mcp",
+        true,
+        "listing_ok",
+        0
+      ],
+      [
+        "support",
+        "http://urumi-support-mcp:8000/mcp",
+        true,
+        "listing_ok",
+        1
+      ],
+      [
+        "utility",
+        "http://urumi-utility-mcp:8000/mcp",
+        true,
+        "listing_ok",
+        1
+      ],
+      [
+        "store_174c75b6c0ef57e5",
+        "http://woo-mcp.st-174c75b6c0ef57e5.svc.cluster.local:8000/mcp",
+        true,
+        "listing_ok",
+        6
+      ]
+    ],
+    "storeAToolsRegistered": [],
+    "keys": [
+      [
+        "013b6aeafe9ea69c",
+        "169d3b25942f065b",
+        false,
+        [
+          "store_174c75b6c0ef57e5__list_orders"
+        ]
+      ],
+      [
+        "03ab04ae83ba0191",
+        "169d3b25942f065b",
+        false,
+        []
+      ],
+      [
+        "40ab7159b6c06f90",
+        null,
+        false,
+        []
+      ],
+      [
+        "bfca9a84d7b4380d",
+        "169d3b25942f065b",
+        true,
+        [
+          "store_174c75b6c0ef57e5__list_orders"
+        ]
+      ]
+    ],
+    "storeBKeyToolsList": [
+      "store_174c75b6c0ef57e5__list_orders"
+    ],
+    "postDeleteStoreBListOrders": {
+      "isError": false
+    },
+    "removedStoreAToolCall": {
+      "isError": true,
+      "text": [
+        "Permission denied."
+      ]
+    },
+    "audit": [
+      [
+        "2026-10-25T08:52:49.568142+00:00",
+        "013b6aeafe9ea69c",
+        "store_c4421147ea825bbc__list_orders",
+        "unauthorized",
+        null,
+        null,
+        null
+      ],
+      [
+        "2026-10-25T08:52:49.546085+00:00",
+        "013b6aeafe9ea69c",
+        "store_174c75b6c0ef57e5__list_orders",
+        "success",
+        "store_174c75b6c0ef57e5",
+        513,
+        null
+      ],
+      [
+        "2026-10-25T08:51:17.635485+00:00",
+        "169d3b25942f065b",
+        "admin:delete_store",
+        "success",
+        "store_c4421147ea825bbc",
+        null,
+        "c4421147ea825bbc"
+      ],
+      [
+        "2026-10-25T08:50:59.238865+00:00",
+        "013b6aeafe9ea69c",
+        "store_174c75b6c0ef57e5__list_orders",
+        "success",
+        "store_174c75b6c0ef57e5",
+        613,
+        null
+      ],
+      [
+        "2026-10-25T08:50:43.032030+00:00",
+        "013b6aeafe9ea69c",
+        "store_174c75b6c0ef57e5__list_orders",
+        "success",
+        "store_174c75b6c0ef57e5",
+        1052,
+        null
+      ],
+      [
+        "2026-10-25T08:50:41.490076+00:00",
+        "169d3b25942f065b",
+        "admin:revoke_key",
+        "success",
+        null,
+        null,
+        "bfca9a84d7b4380d"
+      ],
+      [
+        "2026-10-25T08:50:41.424500+00:00",
+        "169d3b25942f065b",
+        "admin:grant_permission",
+        "success",
+        null,
+        null,
+        "013b6aeafe9ea69c store_174c75b6c0ef57e5__list_orders"
+      ],
+      [
+        "2026-10-25T08:50:41.402000+00:00",
+        "169d3b25942f065b",
+        "admin:issue_key",
+        "success",
+        null,
+        null,
+        "013b6aeafe9ea69c"
+      ],
+      [
+        "2026-10-25T08:28:56.423621+00:00",
+        "unauthenticated",
+        "",
+        "unauthorized",
+        null,
+        null,
+        null
+      ]
+    ],
+    "auditLeak": {
+      "bearer": false,
+      "cookieName": false
+    },
+    "hostAvailableMiB": 2464,
+    "testNode": "3.062GiB / 7.58GiB"
+  }
+}

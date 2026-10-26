@@ -7,6 +7,7 @@ does not contain a fake cluster.
 import json
 import logging
 import os
+import re
 import ssl
 import urllib.error
 import urllib.parse
@@ -16,6 +17,19 @@ from typing import Protocol
 from apps.gateway.app.stores.model import NAMESPACE_NAME, PROTECTED_NAMESPACES, OwnershipError
 
 logger = logging.getLogger(__name__)
+
+# The job controller writes these onto a live Job. They are not part of the
+# desired template, and spec.template cannot be updated in place.
+_JOB_INJECTED_LABELS = frozenset(
+    {
+        "batch.kubernetes.io/controller-uid",
+        "batch.kubernetes.io/job-name",
+        "controller-uid",
+    }
+)
+_PV_COLLECTION = "/api/v1/persistentvolumes"
+_PV_ITEM = re.compile(r"^/api/v1/persistentvolumes/[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+_PV_RECLAIM_PHASES = frozenset({"Released", "Failed", "Available"})
 
 _PLURALS = {
     "Secret": "secrets",
@@ -39,6 +53,8 @@ class ClusterClient(Protocol):
     async def delete_namespace(self, name: str, store_id: str) -> None: ...
 
     async def namespace_exists(self, name: str, store_id: str) -> bool: ...
+
+    async def namespace_absent(self, name: str, store_id: str) -> bool: ...
 
     async def secret_exists(self, namespace: str, name: str, store_id: str) -> bool: ...
 
@@ -109,12 +125,24 @@ class HttpClusterClient:
         current_id = _labels(current).get("urumi.dev/store-id", "")
         if current_id != store_id:
             raise OwnershipError("Store resource is not owned by this store.")
-        if kind == "Secret":
+        if kind in {"Secret", "Namespace", "PersistentVolumeClaim"}:
+            return
+        if kind == "Job":
+            # spec.template and spec.selector are immutable. A full PUT fails
+            # once the controller has filled them in, and that failure used to
+            # burn provision attempts until the store was deleted.
+            await self._reconcile_existing_job(resource, current, item)
             return
         version = str((current.get("metadata") or {}).get("resourceVersion", ""))
         desired = json.loads(json.dumps(resource))
         if version:
             desired["metadata"]["resourceVersion"] = version
+        if kind == "StatefulSet":
+            # volumeClaimTemplates cannot change after create. A store made
+            # before a template change keeps its original claim template.
+            live_templates = (current.get("spec") or {}).get("volumeClaimTemplates")
+            if isinstance(live_templates, list):
+                desired["spec"]["volumeClaimTemplates"] = live_templates
         updated, _body = await self._request("PUT", item, desired)
         if updated not in {200, 201}:
             raise RuntimeError(f"Kubernetes update failed for {kind}.")
@@ -130,6 +158,7 @@ class HttpClusterClient:
             raise RuntimeError("Kubernetes namespace read failed.")
         if _labels(current).get("urumi.dev/store-id") != store_id:
             raise OwnershipError("Store namespace is not owned by this store.")
+        # 200 and 202 accept the request. The namespace can still be terminating.
         deleted, _body = await self._request("DELETE", path, None)
         if deleted not in {200, 202, 404}:
             raise RuntimeError("Kubernetes namespace delete failed.")
@@ -143,6 +172,22 @@ class HttpClusterClient:
             raise RuntimeError("Kubernetes namespace read failed.")
         return _labels(current).get("urumi.dev/store-id") == store_id
 
+    async def namespace_absent(self, name: str, store_id: str) -> bool:
+        """True only when this store's namespace is gone.
+
+        A terminating namespace is not absent. A different store-id label is
+        refused rather than treated as deletion.
+        """
+        assert_store_namespace(name, store_id)
+        status, current = await self._request("GET", f"/api/v1/namespaces/{name}", None)
+        if status == 404:
+            return True
+        if status != 200 or not isinstance(current, dict):
+            raise RuntimeError("Kubernetes namespace read failed.")
+        if _labels(current).get("urumi.dev/store-id") != store_id:
+            raise OwnershipError("Store namespace is not owned by this store.")
+        return False
+
     async def secret_exists(self, namespace: str, name: str, store_id: str) -> bool:
         assert_store_namespace(namespace, store_id)
         if name not in {"store-db", "woocommerce-credentials"}:
@@ -153,6 +198,74 @@ class HttpClusterClient:
         if status != 200 or not isinstance(current, dict):
             raise RuntimeError("Kubernetes secret read failed.")
         return _labels(current).get("urumi.dev/store-id") == store_id
+
+    async def release_store_volumes(self, namespace: str, store_id: str) -> bool:
+        """Delete leftover volumes whose claim belonged only to this store.
+
+        Namespace deletion removes the claims. It does not delete a volume
+        whose StorageClass reclaim policy is Retain. Those volumes stay
+        Released, with claimRef.namespace still set to this store. This method
+        deletes only that set. A Bound or Pending volume is left in place and
+        reported as unfinished so the caller keeps retrying. Volumes for any
+        other namespace are not requested for deletion.
+        """
+        assert_store_namespace(namespace, store_id)
+        pending = False
+        token = ""
+        for _page in range(8):
+            path = _PV_COLLECTION + "?limit=100"
+            if token:
+                path += "&continue=" + urllib.parse.quote(token, safe="")
+            status, body = await self._request("GET", path, None)
+            if status != 200 or not isinstance(body, dict):
+                raise RuntimeError("Kubernetes persistent volume list failed.")
+            items = body.get("items") or []
+            if not isinstance(items, list):
+                raise RuntimeError("Kubernetes persistent volume list failed.")
+            for item in items:
+                if not isinstance(item, dict):
+                    pending = True
+                    continue
+                spec = item.get("spec") if isinstance(item.get("spec"), dict) else {}
+                claim = spec.get("claimRef") if isinstance(spec.get("claimRef"), dict) else {}
+                if claim.get("namespace") != namespace:
+                    continue
+                metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+                name = str(metadata.get("name", ""))
+                status_body = item.get("status") if isinstance(item.get("status"), dict) else {}
+                phase = str(status_body.get("phase", ""))
+                if not _PV_ITEM.fullmatch(f"{_PV_COLLECTION}/{name}"):
+                    logger.warning("Skipping a store volume with an unexpected name.")
+                    pending = True
+                    continue
+                if phase not in _PV_RECLAIM_PHASES:
+                    pending = True
+                    continue
+                deleted, _payload = await self._request("DELETE", f"{_PV_COLLECTION}/{name}", None)
+                if deleted not in {200, 202, 404}:
+                    raise RuntimeError("Kubernetes persistent volume delete failed.")
+            metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+            token = str(metadata.get("continue") or "")
+            if not token:
+                return not pending
+        raise RuntimeError("Kubernetes persistent volume list failed.")
+
+    async def _reconcile_existing_job(self, desired: dict, current: dict, item: str) -> None:
+        if _job_succeeded(current):
+            return
+        if not _job_failed(current):
+            return
+        deleted, _body = await self._request("DELETE", item, {"propagationPolicy": "Background"})
+        if deleted not in {200, 202, 404}:
+            raise RuntimeError("Kubernetes job replace failed.")
+        created, _created = await self._request("POST", _collection_path(desired), desired)
+        if created in {200, 201, 202}:
+            return
+        if created != 409:
+            raise RuntimeError("Kubernetes create failed for Job.")
+        status, exists = await self._request("GET", item, None)
+        if status != 200 or not isinstance(exists, dict):
+            raise RuntimeError("Kubernetes create failed for Job.")
 
     async def workloads_ready(self, namespace: str, store_id: str) -> bool:
         assert_store_namespace(namespace, store_id)
@@ -203,7 +316,7 @@ class HttpClusterClient:
             raw = exc.read()
             status = int(exc.code)
         except Exception as exc:
-            logger.warning("Kubernetes API call failed: %s", type(exc).__name__)
+            logger.warning("Kubernetes API call failed: %s (%s)", type(exc).__name__, _cause_name(exc))
             raise RuntimeError("Kubernetes API call failed.") from None
         if not raw:
             return status, None
@@ -247,6 +360,13 @@ def incluster_client() -> HttpClusterClient | None:
     return HttpClusterClient(f"https://{host}:{port}", token, cafile=cafile_value)
 
 
+def _cause_name(exc: BaseException) -> str:
+    """Class name of the underlying failure. The message is not used; it can carry the URL."""
+    reason = getattr(exc, "reason", None) if isinstance(exc, urllib.error.URLError) else None
+    cause = reason if isinstance(reason, BaseException) else exc.__cause__ or exc.__context__
+    return type(cause).__name__ if cause is not None else "none"
+
+
 def _without_secrets_log(resource: dict) -> dict:
     """Return the object to send. Callers must not log it."""
     return resource
@@ -276,8 +396,55 @@ def _prefix(resource: dict) -> str:
     return f"{root}/namespaces/{namespace}"
 
 
+def _job_succeeded(body: dict) -> bool:
+    status = body.get("status") if isinstance(body.get("status"), dict) else {}
+    return int(status.get("succeeded") or 0) >= 1
+
+
+def _job_failed(body: dict) -> bool:
+    if _job_succeeded(body):
+        return False
+    status = body.get("status") if isinstance(body.get("status"), dict) else {}
+    conditions = status.get("conditions") or []
+    if not isinstance(conditions, list):
+        return False
+    return any(
+        isinstance(item, dict) and item.get("type") == "Failed" and item.get("status") == "True" for item in conditions
+    )
+
+
+def _job_template_matches(current: dict, desired: dict) -> bool:
+    live_spec = current.get("spec") if isinstance(current.get("spec"), dict) else {}
+    want_spec = desired.get("spec") if isinstance(desired.get("spec"), dict) else {}
+    return _strip_job_template(live_spec.get("template")) == _strip_job_template(want_spec.get("template"))
+
+
+def _strip_job_template(template: object) -> object:
+    if not isinstance(template, dict):
+        return template
+    copied = json.loads(json.dumps(template))
+    metadata = copied.get("metadata")
+    if isinstance(metadata, dict) and isinstance(metadata.get("labels"), dict):
+        for key in _JOB_INJECTED_LABELS:
+            metadata["labels"].pop(key, None)
+    return copied
+
+
+def _persistent_volume_request(method: str, path: str, payload: dict | None) -> bool:
+    base = path.split("?", 1)[0]
+    if method == "GET" and payload is None and base == _PV_COLLECTION:
+        return True
+    if method == "DELETE" and payload is None and _PV_ITEM.fullmatch(base) and len(base) <= len(_PV_COLLECTION) + 1 + 253:
+        return True
+    return False
+
+
 def _guard_path(method: str, path: str, payload: dict | None) -> None:
-    _reject_dot_segments(path)
+    _reject_dot_segments(path.split("?", 1)[0])
+    if "?" in path:
+        _reject_dot_segments("/" + path.split("?", 1)[1].replace("&", "/").replace("=", "/"))
+    if _persistent_volume_request(method, path, payload):
+        return
     if path == "/api/v1/namespaces" and method == "POST":
         if not isinstance(payload, dict):
             raise OwnershipError("Store namespace is not owned by this store.")

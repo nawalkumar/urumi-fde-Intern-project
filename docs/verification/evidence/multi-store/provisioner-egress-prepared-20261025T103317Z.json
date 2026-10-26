@@ -1,0 +1,81 @@
+{
+  "generatedAt": "20261025T103317Z",
+  "context": "kind-urumi-k8s-test",
+  "helmRevision": 8,
+  "liveChanges": false,
+  "verifiedEndpoints": {
+    "kubernetesService": {
+      "clusterIP": "10.96.0.1",
+      "port": 443,
+      "targetPort": 6443
+    },
+    "endpointSlice": {
+      "addresses": [
+        "172.19.0.2"
+      ],
+      "port": 6443
+    },
+    "apiserver": {
+      "hostNetwork": true,
+      "advertiseAddress": "172.19.0.2",
+      "securePort": 6443,
+      "serviceClusterIPRange": "10.96.0.0/16"
+    },
+    "nodeInternalIP": "172.19.0.2",
+    "kubeProxyMode": "iptables",
+    "calicoDataplane": "Iptables",
+    "provisionerEnv": {
+      "KUBERNETES_SERVICE_HOST": "10.96.0.1",
+      "KUBERNETES_SERVICE_PORT": "443"
+    },
+    "provisionerConntrack": [
+      "tcp 10.96.0.1:443 answered by 172.19.0.2:6443 (5 flows)",
+      "tcp 10.96.89.113:5432 answered by 192.168.184.150:5432 (2 flows)"
+    ],
+    "codePaths": "provisioner uses incluster_client (Kubernetes API), PostgresStore (gateway-db), DNS; refresh_registry only reconfigures the registry and does not contact MCP servers"
+  },
+  "sourceChanges": {
+    "helm/urumi/values.yaml": "storeProvisioner.apiServerEgress: [] (opt-in; empty keeps the older rule)",
+    "helm/urumi/templates/networkpolicy.yaml": "store-provisioner-net: one rule per apiServerEgress entry (ipBlock cidr, TCP port); the older 443/6443 rule with no destination renders only when the list is empty",
+    "helm/urumi/templates/_helpers.tpl": "validate each entry: map with cidr and port, cidr /32 or /128, not 0.0.0.0, port 1-65535",
+    "tests/test_networkpolicy_intent.py": "test_provisioner_api_egress_is_limited_to_listed_hosts, test_provisioner_api_egress_empty_keeps_the_older_rule, test_provisioner_api_egress_rejects_wide_or_malformed_entries",
+    "trackedDevOrDisposableValuesChanged": false,
+    "gitignoredTestValuesChanged": false
+  },
+  "tests": [
+    "pytest tests/test_networkpolicy_intent.py -> 10 passed",
+    "focused networkpolicy/store/routing/discovery/chat set -> 90 passed",
+    "pytest -q --ignore=tests/test_postgres_permissions.py --ignore=tests/test_reset_admin_password_postgres.py -> 318 passed",
+    "helm lint -> 0 failed",
+    "helm template values-disposable.yaml and values-disposable-proposed.yaml (with probe CIDRs) -> render ok"
+  ],
+  "candidateRender": {
+    "command": "helm template ... -f values-kind-urumi-k8s-test.local.yaml --set-json storeProvisioner.apiServerEgress=[{cidr:10.96.0.1/32,port:443},{cidr:172.19.0.2/32,port:6443}]",
+    "diffVsRev8": "urumi-store-provisioner-net only: the destination-free 443/6443 rule is replaced by 10.96.0.1/32:443 and 172.19.0.2/32:6443",
+    "imagesChanged": false,
+    "zeroRoute": false,
+    "serverDryRun": "37 accepted, not persisted"
+  },
+  "intendedGitignoredValuesChange": {
+    "storeProvisioner.apiServerEgress": [
+      {
+        "cidr": "10.96.0.1/32",
+        "port": 443
+      },
+      {
+        "cidr": "172.19.0.2/32",
+        "port": 6443
+      }
+    ]
+  },
+  "uncertainties": [
+    "With iptables kube-proxy, Calico sees the post-DNAT destination, so 172.19.0.2:6443 is the rule that matches today; 10.96.0.1:443 is kept for a dataplane that evaluates before DNAT and is not proven needed here",
+    "If the Kind node IP changes, the provisioner loses API access until the value is updated; failure is closed (provisioning stalls), not open",
+    "Tracked defaults keep the older destination-free rule when the list is empty, so other installs stay as before until they set the value",
+    "The pod is not restarted by this change; established connections may persist until they reconnect"
+  ],
+  "memory": {
+    "hostAvailableMiB": 2515,
+    "testNodeGiB": 2.967
+  }
+}

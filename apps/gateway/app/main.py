@@ -110,7 +110,12 @@ def create_app(
         arguments = getattr(params, "arguments", None)
         return await dispatcher.execute_tool(current_principal.get(), name, arguments)
 
-    mcp = Server("urumi-gateway", on_list_tools=on_list_tools, on_call_tool=on_call_tool)
+    mcp = Server(
+        "urumi-gateway",
+        on_list_tools=on_list_tools,
+        on_call_tool=on_call_tool,
+        get_tool_input_schema=_no_input_schema,
+    )
 
     async def health():
         if await resolved_store.ping():
@@ -269,6 +274,21 @@ def create_app(
     app.state.store_service = store_service
     app.state.discovery = discovery_state
     return app
+
+
+def _no_input_schema(_name: str) -> None:
+    """Give the MCP SDK no schema for its Mcp-Param-* header check on tools/call.
+
+    Without this hook, the SDK runs on_list_tools before dispatching a
+    2026-07-28 tools/call that has arguments. That refreshes every enabled
+    upstream before execute_tool checks the grant, including for calls it then
+    denies. This hook makes no network or store call and answers the same for
+    every name, so it reveals nothing about ungranted tools.
+
+    Trade-off: the gateway does not reject a request whose Mcp-Param-* header
+    disagrees with an x-mcp-header argument. The upstream still receives the
+    body value, with headers the gateway's own client derives from it.
+    """
 
 
 def _store_from_settings(settings: Settings) -> KeyStore:

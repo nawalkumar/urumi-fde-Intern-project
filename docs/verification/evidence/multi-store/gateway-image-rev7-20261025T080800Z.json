@@ -1,0 +1,32 @@
+{
+  "generatedAt": "20261025T080800Z",
+  "image": "urumi-gateway:pvc-labels-20261025T080649Z",
+  "dockerImageId": "sha256:a07ccac185ca98b4113ff4486efbcdca01d60ee30ead29c842bc482619bb7d44",
+  "testNodeConfigId": "sha256:fbf0f744224e748907eb187ad92afe681df51c100355dc3b774446ffc2d169b9",
+  "layersMatchTestNode": true,
+  "devNodeHasTag": false,
+  "arch": "amd64/linux",
+  "build": "docker build -f apps/gateway/Dockerfile -t urumi-gateway:pvc-labels-20261025T080649Z . (exit 0)",
+  "source": {
+    "branch": "submission",
+    "head": "b4b813c568ca70b45d28944a44de4e8e770f874d",
+    "dirty": true,
+    "workingTreeEntries": 43
+  },
+  "fileHashesMatchWorkingTree": {
+    "apps/gateway/app/stores/manifests.py": "332ec2c0d9bde83f357b230e6036093cb98b00bf2fad4286f7ca008ad74be858",
+    "apps/gateway/app/stores/cluster.py": "648e397276d14958e2bc9b80a36b5c12694e3c301bb8926aa02817630dc7d969"
+  },
+  "contentChecks": {
+    "claimTemplateHasStoreAndOwnerLabels": true,
+    "applyKeepsLiveClaimTemplateForExistingStatefulSet": true,
+    "applySkipsPutForExistingNamespaceAndPvc": true,
+    "runningInitJobLeftAlone": true,
+    "wordpressProbePath": "/wp-includes/images/blank.gif"
+  },
+  "testsBeforeBuild": {
+    "command": "pytest tests/test_store_manifests.py tests/test_store_kube.py tests/test_store_routing.py tests/test_stores.py tests/test_networkpolicy_intent.py tests/test_discovery_policy.py -q",
+    "passed": 59,
+    "failed": 0
+  }
+}

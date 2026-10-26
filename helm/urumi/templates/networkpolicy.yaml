@@ -78,6 +78,16 @@ spec:
         - protocol: TCP
           port: 443
     {{- end }}
+    {{- with .Values.networkPolicy.gatewayEgressCIDRs }}
+    - to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -297,7 +307,6 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "urumi.selectorLabels" (list . "wordpress-init") | nindent 14 }}
-        {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.store.mariadb.port }}
@@ -324,7 +333,6 @@ spec:
             matchLabels:
               {{- include "urumi.selectorLabels" (list . "store-provisioner") | nindent 14 }}
         {{- end }}
-        {{- include "urumi.probeFrom" . | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ .Values.database.port }}
@@ -360,8 +368,24 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.database.port }}
+    {{- with .Values.storeProvisioner.apiServerEgress }}
+    {{- range . }}
+    - to:
+        - ipBlock:
+            cidr: {{ .cidr | quote }}
+      ports:
+        - protocol: TCP
+          port: {{ int .port }}
+    {{- end }}
+    {{- else }}
+    # kubernetes.default:443 is DNAT to the apiserver on 6443. Calico matches
+    # the rewritten destination, so 443 alone times out. Without
+    # storeProvisioner.apiServerEgress this rule has no destination limit.
     - ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 6443
+    {{- end }}
 {{- end }}
 {{- end }}

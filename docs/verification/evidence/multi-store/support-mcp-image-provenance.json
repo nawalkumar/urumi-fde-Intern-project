@@ -1,0 +1,14 @@
+{
+  "base_image": "python:3.10-slim",
+  "context": ".",
+  "context_sha256": "8ed4d5c3aff1b315546b2c6c9b36a4f82b17d8fee2f27b8466d16ae53c140f65",
+  "dirty": true,
+  "dockerfile": "apps/support_mcp/Dockerfile",
+  "image_id": "sha256:e1f8735456f9f1528b3d768945785874a37191ac1a934c1b08924cfdf9d223b3",
+  "image_name": "urumi-support-mcp",
+  "limits": "tracked_diff_sha256 hashes git diff HEAD and excludes untracked files. porcelain_sha256 hashes sorted status lines, not file contents. context_sha256 hashes the build-context paths and file bytes left after .dockerignore. None of these hashes reconstructs untracked file contents. dirty true means this build is not a clean reproduction of HEAD.",
+  "porcelain_sha256": "3f69b1b5252723074aef67a4a34d10d4527a55dcb325b64ea0bc2c58091c7611",
+  "revision": "b4b813c568ca70b45d28944a44de4e8e770f874d",
+  "tag": "urumi-support-mcp:b4b813c568ca70b45d28944a44de4e8e770f874d-dirty",
+  "tracked_diff_sha256": "47747f49db411ae2146dec53553be01683aa67b2ec2bdfc179964beba9ca2604"
+}

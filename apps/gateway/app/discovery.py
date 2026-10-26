@@ -87,6 +87,12 @@ async def collect_authorized(
     if not granted:
         return [], {"unauthorized": 0}, ""
     try:
+        decision = await authenticator.authorize(principal)
+    except StoreUnavailable:
+        return [], {"store_unavailable": 1}, "unavailable"
+    if not decision.active:
+        return [], {"unauthorized": 0}, ""
+    try:
         listed = await registry.list_tools_result()  # type: ignore[attr-defined]
     except Exception as exc:
         logger.warning("Discovery listing failed: %s", type(exc).__name__)
@@ -101,7 +107,7 @@ async def collect_authorized(
             _bump(excluded, "unauthorized")
             continue
         try:
-            reason = await store_block_reason(store, name)
+            reason = await store_block_reason(store, name, owner_user_id=decision.user_id)
         except StoreUnavailable:
             return [], {"store_unavailable": 1}, "unavailable"
         if reason is not None:
@@ -273,7 +279,7 @@ async def operator_summary(registry: object, store: object, state: DiscoveryStat
     for row in rows:
         if RESERVED_UPSTREAM.fullmatch(row.upstream_id) is None:
             continue
-        from apps.gateway.app.stores.manifests import _MCP_URL
+        from apps.gateway.app.stores.service import _MCP_URL
 
         registrations.append(
             {

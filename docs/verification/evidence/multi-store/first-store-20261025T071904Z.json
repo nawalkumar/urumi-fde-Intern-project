@@ -1,0 +1,86 @@
+{
+  "generatedAt": "20261025T071904Z",
+  "context": "kind-urumi-k8s-test",
+  "release": "urumi",
+  "revision": 6,
+  "storesCreated": 1,
+  "secondStoreCreated": false,
+  "store": {
+    "name": "acceptance-store-a",
+    "store_id": "c4421147ea825bbc",
+    "namespace": "st-c4421147ea825bbc",
+    "state": "Ready",
+    "upstream_id": "store_c4421147ea825bbc",
+    "attempt": 0,
+    "publicUrl": "http://c4421147ea825bbc.stores.local",
+    "tool_names": [
+      "store_c4421147ea825bbc__list_orders",
+      "store_c4421147ea825bbc__get_order",
+      "store_c4421147ea825bbc__list_products",
+      "store_c4421147ea825bbc__create_product",
+      "store_c4421147ea825bbc__update_order_status",
+      "store_c4421147ea825bbc__create_order"
+    ]
+  },
+  "probes": {
+    "readiness": "/wp-includes/images/blank.gif",
+    "liveness": "/wp-includes/images/blank.gif"
+  },
+  "secrets": {
+    "store-db_keys": [
+      "MARIADB_PASSWORD",
+      "MARIADB_ROOT_PASSWORD",
+      "WORDPRESS_ADMIN_PASSWORD"
+    ],
+    "woocommerce-credentials_keys": [
+      "WOOCOMMERCE_CONSUMER_KEY",
+      "WOOCOMMERCE_CONSUMER_SECRET"
+    ],
+    "valuesPrinted": false
+  },
+  "quotaHard": {
+    "requests.cpu": "2",
+    "requests.memory": "2Gi",
+    "limits.cpu": "4",
+    "limits.memory": "4Gi",
+    "pods": "8",
+    "persistentvolumeclaims": "2",
+    "services": "6"
+  },
+  "limitRangeMax": {
+    "cpu": "1",
+    "memory": "768Mi"
+  },
+  "isolation": {
+    "defaultPodToStoreDb": "timeout_exit_1",
+    "storeWordpressToStoreDb": "ok",
+    "baselineWordpressToStoreDb": "denied"
+  },
+  "mcp": {
+    "ungrantedCallDenied": true,
+    "ungrantedListOmitsStoreTools": true
+  },
+  "baseline": {
+    "podsReady": true,
+    "defaultPvcsUnchanged": [
+      "data-urumi-gateway-db-0",
+      "data-urumi-store-db-0",
+      "urumi-wordpress-data"
+    ]
+  },
+  "memory": {
+    "availableMiB": 2555,
+    "testNodeGiB": 2.939
+  },
+  "fixesApplied": [
+    "provisioner NetworkPolicy allows TCP 6443 after kube-proxy DNAT of kubernetes.default:443",
+    "HttpClusterClient skips PUT for existing Namespace and PersistentVolumeClaim",
+    "running wordpress-init Jobs are not deleted for template drift"
+  ],
+  "images": {
+    "gateway": "urumi-gateway:job-stable-20261025T071558Z",
+    "dockerImageId": "sha256:d15f73ce6eca49fc35d566804d77bd1a83c11d4c82d2fb6073d7be918430dac8"
+  },
+  "chatEnabled": false,
+  "publicEgressEnabled": false
+}

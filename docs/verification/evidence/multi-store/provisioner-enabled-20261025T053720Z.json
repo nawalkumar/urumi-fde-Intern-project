@@ -1,0 +1,57 @@
+{
+  "generatedAt": "20261025T053720Z",
+  "context": "kind-urumi-k8s-test",
+  "namespace": "default",
+  "release": "urumi",
+  "revision": 3,
+  "status": "deployed",
+  "storesCreated": false,
+  "image": {
+    "tag": "urumi-gateway:probe-blank-20261025T053424Z",
+    "dockerImageId": "sha256:35c8203c33b9b85a32a7b6cadb4bea4fefeabf7db30b0ab44a584d5a79edb6e4",
+    "nodeConfigIdPrefix": "ab1f14405a354",
+    "layersMatch": true,
+    "probePathsInImage": 2,
+    "loadedInto": "urumi-k8s-test",
+    "devNodeHasTag": false,
+    "previousTagPreserved": "urumi-gateway:disposable-manual-20261024"
+  },
+  "provisioner": {
+    "deployment": "urumi-store-provisioner",
+    "ready": true,
+    "image": "urumi-gateway:probe-blank-20261025T053424Z",
+    "concurrency": 1,
+    "allowPluginEgress": false,
+    "allowExternalEgress": false
+  },
+  "gateway": {
+    "ready": true,
+    "health": 200,
+    "label": "urumi.dev/gateway=allowed"
+  },
+  "admission": {
+    "policy": "urumi-store-provisioner-scope",
+    "failurePolicy": "Fail",
+    "validationActions": [
+      "Deny"
+    ],
+    "dryRun": "create configmap urumi-admission-probe in default as provisioner SA",
+    "denied": true,
+    "persisted": false
+  },
+  "baseline": {
+    "podsReady": true,
+    "pvcsBound": [
+      "data-urumi-gateway-db-0",
+      "data-urumi-store-db-0",
+      "urumi-wordpress-data"
+    ],
+    "pvcDeleted": false,
+    "initHookReran": "completed without reinstalling WordPress"
+  },
+  "memory": {
+    "availableMiB": 2515,
+    "testNodeGiB": 2.73
+  },
+  "storeNamespaces": []
+}

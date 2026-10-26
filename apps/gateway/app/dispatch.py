@@ -71,7 +71,7 @@ class ToolDispatcher:
         if not allowed:
             await self._auditor.record(decision.actor, tool, "unauthorized", user_id=decision.user_id)
             return _error("Permission denied.")
-        if not await store_call_allowed(self._store, tool):
+        if not await store_call_allowed(self._store, tool, owner_user_id=decision.user_id):
             await self._auditor.record(
                 decision.actor,
                 tool,

@@ -1,12 +1,14 @@
 # Multi-store provisioning
 
-This note describes the store lifecycle added beside the existing single-store Helm release. It is source and test behavior. It is not a claim that a second store was created on `kind-urumi-k8s-dev`.
+This note describes the store lifecycle added beside the existing single-store Helm release. The sections below are source and test behavior. No store was created on `kind-urumi-k8s-dev`.
 
-The current demo store stays in the `default` namespace: WordPress, MariaDB, the WooCommerce MCP server, and the three PersistentVolumeClaims recorded in `docs/assignment-tracker.md`. `storeProvisioner.enabled` is false in `helm/urumi/values.yaml`. `values-dev.yaml` was not changed. Do not `helm upgrade` the live release to turn the provisioner on.
+On `kind-urumi-k8s-test` the provisioner and the admission policy are enabled through a gitignored overlay, and stores were created, isolated, and deleted there. That live record, with each criterion's status, is `docs/verification/multi-store-acceptance.md`. `docs/SUBMISSION_TRACKER.md` summarizes it.
+
+The demo store stays in the `default` namespace: WordPress, MariaDB, the WooCommerce MCP server, and their PersistentVolumeClaims. `storeProvisioner.enabled` and `storeProvisioner.admit` are false in `helm/urumi/values.yaml`. `values-dev.yaml` does not set them. Do not `helm upgrade` the `kind-urumi-k8s-dev` release to turn the provisioner on.
 
 ## Decision
 
-The live chart is one Helm release for the shared demo. A second release per store would shell out to Helm and could touch that release. Store objects are built in Python and applied by a separate provisioner process, not by the public gateway. Helm renders that process, its ServiceAccount, a narrowed ClusterRole, and a ValidatingAdmissionPolicy only when both `storeProvisioner.enabled` and `storeProvisioner.admit` are true. Helm refuses `enabled` without `admit`. Both stay false.
+The live chart is one Helm release for the shared demo. A second release per store would shell out to Helm and could touch that release. Store objects are built in Python and applied by a separate provisioner process, not by the public gateway. Helm renders that process, its ServiceAccount, a narrowed ClusterRole, and a ValidatingAdmissionPolicy only when both `storeProvisioner.enabled` and `storeProvisioner.admit` are true. Helm refuses `enabled` without `admit`, and it refuses `admit` without `enabled`. Both default to false.
 
 Tests use `tests/store_cluster.py`. That double is not imported by the gateway process.
 
@@ -52,7 +54,7 @@ Invalid values fall back to the defaults. A requested image must match a reposit
 
 The store id is 16 hexadecimal characters. The namespace is `st-<id>`. The upstream id is `store_<id>`. The ingress host is `<id>.<domain>`. The display name is a label for people. It is not a Kubernetes name, a hostname, or an upstream id.
 
-Public tools keep the existing `{upstream_id}__{tool}` form, for example `store_<id>__list_orders`. A third `woocommerce` segment would not fit the stored permission grammar, which allows one `__`. The static demo store remains `woocommerce__list_orders`.
+Public tools keep the existing `{upstream_id}__{tool}` form, for example `store_<id>__list_orders`. A third `woocommerce` segment would not fit the stored permission grammar, which allows one `__`. The static demo store remains `woocommerce__list_orders`. Dashboard chat names the granted `list_orders` tools exactly. A request that covers two stores is instructed to call each granted store tool, and it is not instructed to rename one of them to `woocommerce__list_orders`.
 
 A call or a listing is allowed only when the key has that exact name and the store row is `Ready`. `Provisioning`, `Failed`, `Deleting`, and `Deleted` are hidden and return `Permission denied.` The tool name selects the store. Creating a store does not grant its tools.
 
@@ -92,17 +94,19 @@ Each store namespace gets a default-deny NetworkPolicy and separate policies for
 - MariaDB has no egress rules.
 - The MCP server accepts ingress only from the gateway namespace on pods labeled `urumi.dev/gateway=allowed`, plus optional probe CIDRs.
 - WordPress accepts the MCP server, the init Job, the ingress-controller namespace, and optional probe CIDRs.
-- MariaDB accepts only WordPress and the init Job. Probe CIDRs are not database clients.
+- MariaDB accepts only WordPress and the init Job. Its probes run inside the container, so probe CIDRs are not database clients.
 - DNS egress is to `kube-system`.
-- TCP 443 to public addresses, excluding private and link-local ranges, is added for the init Job only when `STORE_ALLOW_PLUGIN_EGRESS` is true. That is how `wp plugin install` can download WooCommerce. It is off by default.
+- TCP 443 to public addresses, excluding private and link-local ranges, is added for the init Job only when `STORE_ALLOW_PLUGIN_EGRESS` is true. The init script downloads WooCommerce only when that flag sets `WORDPRESS_PLUGIN_DOWNLOAD=true`. The default image path is a WordPress image that already contains the plugin (`deploy/wordpress/Dockerfile`). The download stays off.
 
 The client refuses `.` and `..` path segments, including one layer of percent-encoding, and it refuses `default`, `kube-system`, `kube-public`, `kube-node-lease`, `ingress-nginx`, and `calico-system`. A namespace that already exists with a different store id is not updated or deleted.
 
-Secret get and update are limited to the names `store-db` and `woocommerce-credentials`. Deployment, StatefulSet, claim, and the other store object names are likewise limited on get and update. Create has no `resourceNames` restriction in Kubernetes RBAC. Namespace delete also cannot be limited to `st-<id>` by a ClusterRole. `templates/store-provisioner-admission.yaml` is the separate boundary: it matches only the provisioner service account, fails closed, and denies a write unless the namespace is `st-<16 hex>` and the store-id label matches. That policy was not installed or enforced on a cluster. Provisioning remains unsafe to enable until a disposable cluster shows the policy denying a cross-namespace write. The public gateway ServiceAccount is unchanged and does not mount the provisioner token.
+Secret get and update are limited to the names `store-db` and `woocommerce-credentials`. Deployment, StatefulSet, claim, and the other store object names are likewise limited on get and update. Create has no `resourceNames` restriction in Kubernetes RBAC. Namespace delete also cannot be limited to `st-<id>` by a ClusterRole. `templates/store-provisioner-admission.yaml` is the separate boundary: it matches only the provisioner service account, fails closed, and denies a write unless the namespace is `st-<16 hex>` and the store-id label matches. On `kind-urumi-k8s-test` the policy is installed with `failurePolicy: Fail` and `validationActions: [Deny]`. One server dry-run ConfigMap create in `default`, sent as the provisioner ServiceAccount, was denied and not stored (`docs/verification/evidence/multi-store/provisioner-enabled-20261025T053720Z.json`). That is one kind and one verb. Namespace delete, Secret create, and volume delete outside the scope were not tried. The policy status reports CEL type-check warnings on the persistent-volume branch, because other matched kinds have no `spec.claimRef`; warnings do not stop enforcement. The public gateway ServiceAccount is unchanged and does not mount the provisioner token.
 
 Official MariaDB and WordPress images start as root. Those containers set `allowPrivilegeEscalation: false` and do not set `runAsNonRoot`. The MCP container runs as UID 10001 and drops all capabilities. The init Job runs as UID 33. The namespace is not labeled `restricted` because those database and WordPress images would not satisfy it.
 
-Provisioned claims do not set `helm.sh/resource-policy: keep`. Deleting the namespace deletes the claims. Whether the volume is deleted depends on the StorageClass. The demo claims in `default` are not in a `st-<id>` namespace and are not selected.
+Provisioned claims do not set `helm.sh/resource-policy: keep`. The database StatefulSet asks Kubernetes to delete its claims when the StatefulSet is deleted. Deleting the namespace deletes the claims. A StorageClass reclaim policy of Delete then deletes the volume. A Retain policy leaves the volume Released with `claimRef.namespace` still set to `st-<id>`. After the namespace is gone, the provisioner lists volumes and deletes only those Released, Failed, or Available volumes. A Bound volume for that namespace keeps the store in Deleting until a later pass. Volumes for any other namespace are not deleted. The demo claims in `default` are not selected.
+
+An existing init Job is not updated with PUT. `spec.template` is immutable, and the controller adds a selector after create. A succeeded Job is left in place. A failed Job, or a still-running Job whose template no longer matches, is deleted and created again. That replacement is limited to the name `wordpress-init`.
 
 ## What Ready means
 
@@ -110,15 +114,15 @@ Provisioned claims do not set `helm.sh/resource-policy: keep`. Deleting the name
 
 ## Disposable end-to-end path
 
-`scripts/disposable-store-acceptance.sh` prints the steps and refuses to run them unless `--execute` is set and `URUMI_DISPOSABLE_KUBE_CONTEXT` names the current context, contains `disposable`, and is not `kind-urumi-k8s-dev` or `kind-urumi-k8s-test`. That script was not executed for this change.
+`scripts/disposable-store-acceptance.sh` prints the steps and refuses to run them unless `--execute` is set and `URUMI_DISPOSABLE_KUBE_CONTEXT` names the current context, contains `disposable`, and is not `kind-urumi-k8s-dev` or `kind-urumi-k8s-test`. `--unit` was run. `--execute` was not. The owner later authorized `kind-urumi-k8s-test` for a live pass, which used reviewed manual commands instead of this script; see the ledger section "Test-cluster live pass".
 
 Prerequisites before any execute:
 
 1. A new Kind cluster whose context name contains `disposable`. Do not use the existing dev or test clusters.
 2. Calico, or another CNI that enforces NetworkPolicy. Kindnet does not.
 3. An ingress controller in the namespace set by `STORE_INGRESS_NAMESPACE` (default `ingress-nginx`).
-4. Images present on the node: `wordpress:6.8-php8.2-apache`, `mariadb:11.4`, `wordpress:cli-php8.2`, and `urumi-woocommerce-mcp` built from this checkout. The gateway and dashboard images also have to be built from this checkout. The running `partial-20261019` images do not contain this code.
-5. `STORE_PROVISIONER_ENABLED=true` and, unless the WordPress image already contains WooCommerce, `STORE_ALLOW_PLUGIN_EGRESS=true`.
+4. Images present on the node: `urumi-wordpress-woo` built from `deploy/wordpress/Dockerfile` (WooCommerce is already in the image), `mariadb:11.4`, `wordpress:cli-php8.2`, and `urumi-woocommerce-mcp` built from this checkout. The gateway and dashboard images also have to be built from this checkout. The running `partial-20261019` images do not contain this code.
+5. `STORE_PROVISIONER_ENABLED=true` and `STORE_ALLOW_PLUGIN_EGRESS=false` when the WordPress image already contains WooCommerce. `helm/urumi/values-disposable.yaml` is the values file for that cluster. Do not use it on the live release.
 6. Helm install of this chart on that cluster only, with `storeProvisioner.enabled=true`, so the gateway ServiceAccount and the `urumi.dev/gateway=allowed` label exist. Do not point that install at the live release.
 7. Hosts or DNS for `<store id>.stores.local`. Do not reuse `store.local`.
 8. An admin session, then an exact grant of `store_<id>__list_orders` for each store on the chat key. Creation does not grant tools.
@@ -127,9 +131,11 @@ Cleanup on that cluster is `POST /admin/stores/{id}/delete`, repeated once. The 
 
 ## Known gaps
 
-- No store was created on a cluster during this change.
-- NetworkPolicy isolation was checked as object shape, not as packets.
-- The init Job cannot download WooCommerce while plugin egress is false.
-- Standard RBAC cannot express "only namespaces named st-<id>". The admission policy is the write boundary and has not been enforced at runtime. Enabling the provisioner on the live cluster is still unsafe.
-- Secret create is cluster-scoped at RBAC and is expected to be denied by that policy. GET of an unrelated Secret is denied by `resourceNames`, which does not depend on admission.
-- `Ready` does not include a successful `list_orders` call.
+Runtime acceptance is recorded in `docs/verification/multi-store-acceptance.md`. A source change is not a cluster pass.
+
+- Standard RBAC cannot express "only namespaces named st-<id>". The admission policy is the write boundary. It also denies persistent-volume changes except deletion of a volume whose claim namespace is `st-<16 hex>`. On the test cluster it denied one out-of-scope dry-run write. Do not enable the provisioner on the `kind-urumi-k8s-dev` release.
+- Secret create is cluster-scoped at RBAC and is expected to be denied by that policy outside `st-<id>`. That denial was not tried live. GET of an unrelated Secret is denied by `resourceNames`, which does not depend on admission.
+- The node `/32` used for kubelet probes can reach every store's WordPress and MCP ports. The store MCP does not authenticate callers.
+- The chart default for provisioner egress allows TCP 443 and 6443 to any destination unless `storeProvisioner.apiServerEgress` is set.
+- Not demonstrated live: cross-owner denial, concurrent provisioning, the provisioning timeout, the Retain-volume sweep, repeated delete, restart during delete, and the chat answer text for a cross-store comparison.
+- `Ready` means the workloads and the upstream registration succeeded. It still does not by itself mean a shopper checked out.

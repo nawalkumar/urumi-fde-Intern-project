@@ -90,6 +90,16 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["create"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["delete"]
+    resourceNames: ["wordpress-init"]
+  # List is required to find Released volumes after a Retain reclaim. Admission
+  # allows DELETE only when claimRef.namespace is st-<store id>. Create and
+  # update of volumes are not granted.
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "delete"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]
     verbs: ["get", "update"]

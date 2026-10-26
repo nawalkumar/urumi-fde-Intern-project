@@ -86,6 +86,8 @@ class WooClient:
         payload = _decode(response)
         if 200 <= response.status_code < 300:
             return payload
+        if 300 <= response.status_code < 400:
+            raise WooError(_redirect_message(response))
         if response.status_code in {401, 403}:
             raise WooError("WooCommerce rejected the API credentials.")
         if response.status_code == 404:
@@ -94,6 +96,19 @@ class WooClient:
         if detail is None:
             raise WooError(f"WooCommerce returned HTTP {response.status_code}.")
         return _raise_http(response.status_code, detail)
+
+
+def _redirect_message(response: Any) -> str:
+    """Name the WordPress installer redirect. The Location value is not echoed."""
+    headers = getattr(response, "headers", None) or {}
+    location = headers.get("location") or ""
+    path = urlsplit(location).path if isinstance(location, str) else ""
+    if path.rstrip("/").endswith("/wp-admin/install.php"):
+        return (
+            "WordPress is not installed, so WooCommerce cannot answer "
+            f"(HTTP {response.status_code} to the installer). The store database may be empty."
+        )
+    return f"WooCommerce redirected the request (HTTP {response.status_code}). Redirects are not followed."
 
 
 def _raise_http(status_code: int, detail: str) -> Any:

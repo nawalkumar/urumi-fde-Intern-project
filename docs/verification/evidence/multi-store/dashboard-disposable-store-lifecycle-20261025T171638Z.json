@@ -1,0 +1,135 @@
+{
+  "generatedAt": "2026-10-25T17:16:38Z",
+  "observedOn": "2026-10-25",
+  "observationTimesRecorded": false,
+  "context": {
+    "cluster": "kind-urumi-k8s-test",
+    "kubeContext": "kind-urumi-k8s-test",
+    "helmRevision": 10,
+    "helmRevisionNote": "Gateway schema-hook rollout (see gateway-schema-hook-rollout-20261025T151552Z.json)",
+    "dashboardUrl": "http://127.0.0.1:18081/",
+    "dashboardHttpStatus": 200
+  },
+  "scope": "Dashboard-driven create, Ready, and delete of one disposable store, plus namespace and PersistentVolume cleanup and preservation of Store B and Store C claims. Recorded from manually observed dashboard and terminal checks. Exact command output and observation timestamps were not captured in this record. This is not a complete pass of the acceptance criteria.",
+  "create": {
+    "method": "Dashboard create form",
+    "storeName": "acceptance-disposable-20261025",
+    "idempotencyKey": "disposable-20261025-01",
+    "dashboardShowed": {
+      "storeId": "d8cd81554d850255",
+      "url": "http://d8cd81554d850255.stores.local",
+      "status": "Ready"
+    },
+    "namespace": "st-d8cd81554d850255"
+  },
+  "preDelete": {
+    "namespace": "st-d8cd81554d850255",
+    "pvcs": [
+      {
+        "claim": "data-store-db-0",
+        "volume": "pvc-b17bdec0-7333-4d3e-bae5-7a2390bb3347",
+        "size": "2Gi",
+        "phase": "Bound"
+      },
+      {
+        "claim": "wordpress-data",
+        "volume": "pvc-5136e706-5875-48be-8b0e-be5fbdf0b0d8",
+        "size": "2Gi",
+        "phase": "Bound"
+      }
+    ]
+  },
+  "delete": {
+    "method": "Dashboard Delete action",
+    "storeId": "d8cd81554d850255",
+    "dashboardShowed": [
+      "Deleting (briefly)",
+      "Store no longer listed after refresh"
+    ]
+  },
+  "postDelete": {
+    "namespace": {
+      "name": "st-d8cd81554d850255",
+      "result": "NotFound"
+    },
+    "persistentVolumes": [
+      {
+        "name": "pvc-b17bdec0-7333-4d3e-bae5-7a2390bb3347",
+        "result": "NotFound"
+      },
+      {
+        "name": "pvc-5136e706-5875-48be-8b0e-be5fbdf0b0d8",
+        "result": "NotFound"
+      }
+    ]
+  },
+  "protectedStores": [
+    {
+      "label": "Store B",
+      "storeId": "174c75b6c0ef57e5",
+      "namespace": "st-174c75b6c0ef57e5",
+      "namespacePhase": "Active",
+      "pvcs": [
+        {
+          "claim": "data-store-db-0",
+          "volume": "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7",
+          "size": "2Gi",
+          "phase": "Bound"
+        },
+        {
+          "claim": "wordpress-data",
+          "volume": "pvc-9cc41993-f39d-4f92-8204-7974b4546771",
+          "size": "2Gi",
+          "phase": "Bound"
+        }
+      ]
+    },
+    {
+      "label": "Store C",
+      "storeId": "5bc7dc01da3ccf38",
+      "namespace": "st-5bc7dc01da3ccf38",
+      "namespacePhase": "Active",
+      "pvcs": [
+        {
+          "claim": "data-store-db-0",
+          "volume": "pvc-da403201-662a-4320-a0d8-6ab86528c40e",
+          "size": "2Gi",
+          "phase": "Bound"
+        },
+        {
+          "claim": "wordpress-data",
+          "volume": "pvc-5d211c94-7e52-4752-a983-c51d2e64b5ef",
+          "size": "2Gi",
+          "phase": "Bound"
+        }
+      ]
+    }
+  ],
+  "health": {
+    "finalPodCheck": "Running application pods on the test cluster were Ready with zero restarts.",
+    "completedPods": [
+      {
+        "name": "urumi-wordpress-init",
+        "status": "Completed",
+        "note": "Expected for the one-time init pod"
+      }
+    ]
+  },
+  "limitations": [
+    "Recorded from manually observed dashboard and terminal checks; raw command output and exact observation timestamps were not captured.",
+    "Store B and Store C namespace phase and claim binding were checked; object uids, pod generations, and store readiness in the dashboard were not recorded here.",
+    "Audit rows for the create and delete were not inspected; audit-row completeness is not shown.",
+    "Removal of the disposable store's registry upstream and tool grants was not verified.",
+    "No call with a removed tool name was made; stale-tool rejection is not shown.",
+    "No wrong-owner create or delete was attempted.",
+    "Retain reclaim-policy behaviour was not exercised.",
+    "Deletion was not interrupted; recovery after a provisioner restart is not shown.",
+    "Repeated delete and duplicate-create with the same idempotency key were not exercised.",
+    "This does not by itself establish that MS-01 through MS-08 pass."
+  ],
+  "mutations": [
+    "Created disposable store acceptance-disposable-20261025 (d8cd81554d850255) through the dashboard",
+    "Deleted disposable store d8cd81554d850255 through the dashboard"
+  ],
+  "secretsPrinted": false
+}

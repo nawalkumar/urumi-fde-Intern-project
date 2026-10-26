@@ -4,8 +4,9 @@
 # service account. failurePolicy Fail denies the write when the policy cannot
 # be evaluated. GET and LIST are not admission requests; secret reads are
 # limited by resourceNames on the ClusterRole instead.
-# This manifest was not enforced on a live cluster. Leave both flags false
-# on the cluster that holds unrelated Secrets.
+# Enabled on kind-urumi-k8s-test through a gitignored local overlay. No denied
+# admission request has been recorded yet, so MS-06g stays BLOCKED. Keep both
+# flags false on kind-urumi-k8s-dev.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -19,7 +20,7 @@ spec:
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
-        resources: ["namespaces", "secrets", "configmaps", "services", "persistentvolumeclaims", "serviceaccounts", "resourcequotas", "limitranges"]
+        resources: ["namespaces", "secrets", "configmaps", "services", "persistentvolumeclaims", "persistentvolumes", "serviceaccounts", "resourcequotas", "limitranges"]
       - apiGroups: ["apps"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
@@ -37,6 +38,13 @@ spec:
       expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" .Release.Namespace (include "urumi.serviceName" (list . "store-provisioner")) | quote }}
   validations:
     - expression: >-
+        request.resource.resource == 'persistentvolumes'
+        ? (
+          request.operation == 'DELETE'
+          && has(oldObject.spec.claimRef.namespace)
+          && string(oldObject.spec.claimRef.namespace).matches('^st-[0-9a-f]{16}$')
+        )
+        : (
         request.namespace == ''
         ? (
           (has(object.metadata.name) ? object.metadata.name : request.name).matches('^st-[0-9a-f]{16}$')
@@ -69,6 +77,7 @@ spec:
               && object.metadata.name in ['store-db', 'woocommerce-credentials']
             )
           )
+        )
         )
       message: Provisioner changes are limited to an owned store namespace.
 ---

@@ -1,0 +1,66 @@
+{
+  "generatedAt": "20261025T095751Z",
+  "mode": "read-only revision-8 preflight",
+  "clusterMutations": false,
+  "filesChanged": false,
+  "shellContext": "kind-urumi-k8s-dev (not used; every command named kind-urumi-k8s-test)",
+  "helm": {
+    "revision": 7,
+    "status": "deployed",
+    "gatewayImage": "urumi-gateway:pvc-labels-20261025T080649Z"
+  },
+  "health": {
+    "defaultUnready": [],
+    "defaultRestarts": 0,
+    "storeBUnready": [],
+    "storeBRestarts": 0,
+    "activeOperations": []
+  },
+  "chatSecret": {
+    "name": "urumi-test-chat",
+    "namespace": "default",
+    "keys": [
+      "CHAT_API_KEY",
+      "CHAT_API_URL",
+      "CHAT_MODEL"
+    ],
+    "created": "2026-10-25T09:51:24Z",
+    "valuesRead": false
+  },
+  "gateway": {
+    "pod": "urumi-gateway-7d5dd886cc-jn59v",
+    "started": "2026-10-25T08:08:35Z",
+    "envRefs": "CHAT_API_KEY, CHAT_API_URL, CHAT_MODEL -> urumi-test-chat, optional",
+    "envInPod": "all three unset",
+    "restartRequired": true
+  },
+  "egress": {
+    "currentTcp443ToApiGroqCom": "blocked (TimeoutError)",
+    "apiGroqComIPv4": [
+      "104.18.38.236",
+      "172.64.149.20"
+    ],
+    "chartSwitch": "networkPolicy.allowExternalEgress adds TCP 443 to 0.0.0.0/0 except 10/8, 172.16/12, 192.168/16, 169.254/16",
+    "policiesAffectedBySwitch": [
+      "urumi-gateway-net",
+      "urumi-wordpress-init-net (baseline init Job)"
+    ],
+    "notAffected": [
+      "store namespaces (allowPluginEgress stays false)",
+      "dashboard",
+      "MCP servers",
+      "databases",
+      "provisioner (already has unrestricted TCP 443/6443 rule with no 'to')"
+    ],
+    "narrowerOption": "chart has no per-CIDR or gateway-only egress value; pinning api.groq.com /32s needs a template change"
+  },
+  "deletionFix": {
+    "tests": "pytest tests/test_stores.py tests/test_store_kube.py -q -> 43 passed",
+    "deployed": false
+  },
+  "renderCandidate": "helm template with --set networkPolicy.allowExternalEgress=true --set gateway.image.tag=REV8-CANDIDATE: only diffs are the two 443 egress rules and the gateway/provisioner image lines",
+  "memory": {
+    "hostAvailableMiB": 2548,
+    "testNodeGiB": 2.856
+  }
+}

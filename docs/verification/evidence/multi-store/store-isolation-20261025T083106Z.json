@@ -1,0 +1,160 @@
+{
+  "generatedAt": "20261025T083106Z",
+  "context": "kind-urumi-k8s-test",
+  "preflight": {
+    "helmRevision": 7,
+    "image": "urumi-gateway:pvc-labels-20261025T080649Z",
+    "concurrency": "1",
+    "activeOperations": [],
+    "storesReady": [
+      "c4421147ea825bbc",
+      "174c75b6c0ef57e5"
+    ],
+    "restarts": 0,
+    "hostAvailableMiB": 2332,
+    "testNodeGiB": 3.194
+  },
+  "liveWrites": [
+    "POST /admin/keys user_id=169d3b25942f065b -> 201 key_id bfca9a84d7b4380d",
+    "POST /admin/keys/bfca9a84d7b4380d/permissions tool_name=store_174c75b6c0ef57e5__list_orders -> 200"
+  ],
+  "whyNewKey": "raw value of key 03ab04ae83ba0191 was discarded after the 08:01Z test; one new key was issued for Store B; Store A's grant was not changed",
+  "keyValueHandling": "raw key existed only in gateway pod process memory during the test; not printed, written, or logged",
+  "authorization": {
+    "method": "POST http://127.0.0.1:8000/mcp from inside the gateway pod, JSON-RPC tools/list and tools/call with Authorization: Bearer",
+    "verified": {
+      "storeB_key_tools_list": [
+        "store_174c75b6c0ef57e5__list_orders"
+      ],
+      "storeB_list_orders": {
+        "http": 200,
+        "isError": false,
+        "audit": "success upstream store_174c75b6c0ef57e5 6923 ms",
+        "resultText": "16 chars, no order content recorded"
+      },
+      "storeA_list_orders_earlier": "key 03ab04ae83ba0191 at 08:01Z: success upstream store_c4421147ea825bbc"
+    },
+    "denied": {
+      "storeB_get_order_ungranted": "Permission denied., audit unauthorized",
+      "storeA_list_orders_with_storeB_key": "Permission denied., audit unauthorized",
+      "storeA_get_order_with_storeB_key": "Permission denied., audit unauthorized",
+      "woocommerce__list_orders_with_storeB_key": "Permission denied., audit unauthorized",
+      "invalid_token_tools_list": "401 invalid_token, audit unauthenticated",
+      "invalid_token_tools_call": "401 invalid_token, audit unauthenticated"
+    },
+    "inconclusive": {
+      "storeA_key_calling_storeB_tool": "not run; key 03ab04ae83ba0191 raw value unavailable and no second key was issued",
+      "cross_owner_denial": "not run live; both stores have the same owner. Covered by tests/test_store_routing.py only"
+    },
+    "auditLeak": {
+      "containsBearerPrefix": false,
+      "containsSessionCookieName": false
+    }
+  },
+  "network": {
+    "method": "kubectl exec into existing pods; PHP fsockopen or Python socket connect, 3 s timeout; no diagnostic pods created",
+    "policiesRead": "default-deny (all pods, Ingress+Egress); store-db ingress from same-namespace wordpress and wordpress-init on 3306; wordpress ingress from same-namespace woo-mcp, wordpress-init, ingress-nginx namespace, 172.19.0.2/32 on 80; woo-mcp ingress from default namespace pods labeled urumi.dev/gateway=allowed and 172.19.0.2/32 on 8000; gateway egress to namespaces labeled urumi.dev/store=true on 8000",
+    "verified": {
+      "storeA_wordpress_to_own_store_db_3306": "connect",
+      "storeB_wordpress_to_own_store_db_3306": "connect",
+      "storeA_woo_mcp_to_own_wordpress_80": "connect",
+      "storeB_woo_mcp_to_own_wordpress_80": "connect",
+      "gateway_to_storeA_woo_mcp_8000": "connect",
+      "gateway_to_storeB_woo_mcp_8000": "connect",
+      "dns_all_probes": "resolved"
+    },
+    "denied": {
+      "storeA_wordpress_to_storeB_store_db_3306": "timeout",
+      "storeA_wordpress_to_storeB_wordpress_80": "timeout",
+      "storeA_wordpress_to_storeB_woo_mcp_8000": "timeout",
+      "storeB_wordpress_to_storeA_store_db_3306": "timeout",
+      "storeB_wordpress_to_storeA_wordpress_80": "timeout",
+      "storeB_wordpress_to_storeA_woo_mcp_8000": "timeout",
+      "storeA_woo_mcp_to_storeB_wordpress_80": "timeout",
+      "storeA_woo_mcp_to_storeB_store_db_3306": "timeout",
+      "storeA_woo_mcp_to_storeB_woo_mcp_8000": "timeout",
+      "storeB_woo_mcp_to_storeA_wordpress_80": "timeout",
+      "storeB_woo_mcp_to_storeA_store_db_3306": "timeout",
+      "storeB_woo_mcp_to_storeA_woo_mcp_8000": "timeout",
+      "gateway_to_storeB_store_db_3306": "timeout",
+      "gateway_to_storeB_wordpress_80": "timeout",
+      "baseline_wordpress_to_storeB_store_db_3306": "timeout",
+      "baseline_wordpress_to_storeB_woo_mcp_8000": "timeout",
+      "baseline_wordpress_to_storeA_store_db_3306": "timeout"
+    },
+    "caveat": "Every denied source also has a restrictive egress policy, so these probes show the path is closed but do not isolate destination ingress rules from source egress rules."
+  },
+  "post": {
+    "helmRevision": 7,
+    "default": {
+      "unready": [],
+      "restarts": 0
+    },
+    "st-c4421147ea825bbc": {
+      "unready": [],
+      "restarts": 0
+    },
+    "st-174c75b6c0ef57e5": {
+      "unready": [],
+      "restarts": 0
+    },
+    "pvs": {
+      "pvc-00ba996f-ea68-4f44-ab5d-26184b9201c7": "st-c4421147ea825bbc/wordpress-data Bound",
+      "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a": "default/urumi-wordpress-data Bound",
+      "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7": "st-174c75b6c0ef57e5/data-store-db-0 Bound",
+      "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971": "default/data-urumi-gateway-db-0 Bound",
+      "pvc-8ca68528-e380-4896-a925-335cafddda34": "default/data-urumi-store-db-0 Bound",
+      "pvc-9cc41993-f39d-4f92-8204-7974b4546771": "st-174c75b6c0ef57e5/wordpress-data Bound",
+      "pvc-cfec2069-30de-43ee-b62f-7f02c16a7aa3": "st-c4421147ea825bbc/data-store-db-0 Bound"
+    },
+    "namespaces": [
+      "calico-system",
+      "default",
+      "kube-node-lease",
+      "kube-public",
+      "kube-system",
+      "local-path-storage",
+      "st-174c75b6c0ef57e5",
+      "st-c4421147ea825bbc",
+      "tigera-operator"
+    ],
+    "hostAvailableMiB": 2288,
+    "testNode": "3.249GiB / 7.58GiB",
+    "stores": [
+      [
+        "174c75b6c0ef57e5",
+        "Ready"
+      ],
+      [
+        "c4421147ea825bbc",
+        "Ready"
+      ]
+    ],
+    "keys": [
+      [
+        "03ab04ae83ba0191",
+        "169d3b25942f065b",
+        false,
+        [
+          "store_c4421147ea825bbc__list_orders"
+        ]
+      ],
+      [
+        "40ab7159b6c06f90",
+        null,
+        false,
+        []
+      ],
+      [
+        "bfca9a84d7b4380d",
+        "169d3b25942f065b",
+        false,
+        [
+          "store_174c75b6c0ef57e5__list_orders"
+        ]
+      ]
+    ],
+    "diagnosticPodsCreated": 0,
+    "leftoverNpStrangerPods": []
+  }
+}

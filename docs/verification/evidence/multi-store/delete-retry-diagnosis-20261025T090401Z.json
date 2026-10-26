@@ -1,0 +1,47 @@
+{
+  "generatedAt": "20261025T090401Z",
+  "phase": "1 read-only diagnosis",
+  "codeChanged": false,
+  "clusterMutations": false,
+  "sourceLocations": {
+    "api": "apps/gateway/app/stores/api.py delete_store -> StoreService.request_delete",
+    "requestDelete": "apps/gateway/app/stores/service.py:173-211 sets state deleting, phase unregister, attempt 0, clears error, revokes grants, drops upstream, schedules reconcile",
+    "sweep": "service.py:271-299 reconcile_due schedules every row from list_operations (provisioning and deleting) on each worker pass; worker sleeps 2 s between passes",
+    "teardown": "service.py:478-512 _teardown: delete_namespace, then _namespace_is_absent (bounded 1 s poll, 0.2 s steps), then _release_volumes, then Deleted",
+    "incomplete": "service.py:541-552 _note_delete_incomplete: attempt += 1 on every pass where the namespace is still present or volumes pending; sets error_code delete_blocked once attempt >= max_attempts; never stops retrying",
+    "deleteNamespace": "apps/gateway/app/stores/cluster.py:145-158: 404 returns; 200/202/404 on DELETE accepted; other codes raise RuntimeError",
+    "terminal": "service.py:505-512 Deleted clears error_code and error_message",
+    "message": "apps/gateway/app/stores/model.py:64 delete_blocked = 'That store could not be deleted.'"
+  },
+  "sequence": [
+    "08:51:17Z request_delete: deleting, attempt 0, grants revoked, upstream removed",
+    "each ~2-3 s worker pass: delete_namespace accepted (no WARNING logged in the provisioner), namespace still Terminating after the 1 s wait, _note_delete_incomplete increments attempt",
+    "pass 5 (max_attempts=5): error_code delete_blocked and message set while termination was normal",
+    "passes continued to attempt 16; namespace became absent; volumes were already gone (Delete reclaim); _teardown set Deleted and cleared the error"
+  ],
+  "provisionerWarnings2h": 0,
+  "answers": {
+    "counterMeaning": "reconcile passes that found deletion incomplete, including normal Terminating; not genuine failures",
+    "normalTerminationTreatedAsFailure": true,
+    "fiveAttemptLimit": "not a stop; only the threshold for the delete_blocked message; retries continue and attempt is unbounded",
+    "deletedStateConsistent": true,
+    "deletedEvidence": "namespace absent, both Store A volumes gone, upstream row gone, grant revoked; error cleared on Deleted"
+  },
+  "existingTestsEncodingBehavior": [
+    "tests/test_stores.py::test_terminating_namespace_times_out_without_claiming_deletion asserts delete_blocked after one held pass with max_attempts=1",
+    "tests/test_stores.py::test_accepted_namespace_delete_is_not_completion, test_namespace_absence_completes_a_held_deletion, test_failed_namespace_delete_retries_without_exposing_tools_or_the_other_store, test_deletion_is_idempotent_and_drops_registration_immediately"
+  ],
+  "proposedFix": [
+    "request_delete sets deadline_at = now + timeout_seconds when entering deleting",
+    "accepted-but-still-terminating or volumes-pending passes do not increment attempt; progress says it is waiting; delete_blocked only after deadline_at passes",
+    "genuine failures (exception from delete_namespace or volume release) increment attempt, capped at max_attempts; delete_blocked when the cap is reached",
+    "retries continue in both cases; Deleted still clears the error"
+  ],
+  "regressionTests": [
+    "namespace already absent -> Deleted, attempt 0, no error",
+    "terminating for more passes than max_attempts then disappearing -> no error and attempt 0 while waiting, then Deleted",
+    "terminating past the deadline -> delete_blocked, still not complete, then Deleted when gone",
+    "genuine API failures -> attempt capped at max_attempts with delete_blocked, then Deleted with error cleared after recovery",
+    "duplicate delete requests during deleting do not reset the record; after Deleted return deleted"
+  ]
+}

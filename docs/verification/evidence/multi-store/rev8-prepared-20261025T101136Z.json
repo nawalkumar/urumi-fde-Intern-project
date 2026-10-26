@@ -1,0 +1,85 @@
+{
+  "generatedAt": "20261025T101136Z",
+  "context": "kind-urumi-k8s-test",
+  "helmRevision": 7,
+  "helmUpgradeRun": false,
+  "workloadsRestarted": false,
+  "sourceChanges": {
+    "helm/urumi/values.yaml": "networkPolicy.gatewayEgressCIDRs: [] (chart default, empty)",
+    "helm/urumi/templates/networkpolicy.yaml": "urumi-gateway-net egress gains one rule: ipBlock per gatewayEgressCIDRs entry, TCP 443; rendered only when the list is non-empty",
+    "helm/urumi/templates/_helpers.tpl": "urumi.validate rejects any gatewayEgressCIDRs entry that is not IPv4 /32 or is 0/8, 10/8, 127/8, 169.254/16, 172.16/12, 192.168/16, 100.64/10, >=224, or has an octet >255",
+    "tests/test_networkpolicy_intent.py": "test_gateway_egress_allowlist_reaches_only_the_gateway_policy, test_gateway_egress_allowlist_is_empty_by_default, test_gateway_egress_allowlist_rejects_non_public_or_wide_entries",
+    "trackedDevOrDisposableValuesChanged": false,
+    "gitignoredTestValuesChanged": false
+  },
+  "tests": [
+    "pytest tests/test_networkpolicy_intent.py -q -> 7 passed",
+    "pytest networkpolicy, store manifests, store kube, store routing, stores, discovery, chat, chat provider -> 87 passed",
+    "pytest -q --ignore=tests/test_postgres_permissions.py --ignore=tests/test_reset_admin_password_postgres.py -> 315 passed",
+    "helm lint helm/urumi --set database.password=lint-placeholder --set store.enabled=false -> 0 failed"
+  ],
+  "renderPreview": {
+    "command": "helm template ... -f values-kind-urumi-k8s-test.local.yaml --set gateway.image.tag=chat-egress-20261025T100634Z --set-json networkPolicy.gatewayEgressCIDRs=[104.18.38.236/32,172.64.149.20/32]",
+    "diffVsRev7": [
+      "urumi-gateway-net: + egress to 104.18.38.236/32 and 172.64.149.20/32 on TCP 443",
+      "gateway and store-provisioner image line"
+    ],
+    "policyCidrs": {
+      "urumi-gateway-net": [
+        "172.19.0.2/32 (probe ingress)",
+        "104.18.38.236/32",
+        "172.64.149.20/32"
+      ],
+      "urumi-wordpress-init-net": [],
+      "urumi-upstream-net": [
+        "172.19.0.2/32 (probe ingress)"
+      ],
+      "urumi-dashboard-net": [
+        "172.19.0.2/32 (probe ingress)"
+      ],
+      "urumi-wordpress-net": [
+        "172.19.0.2/32 (probe ingress)"
+      ],
+      "urumi-woocommerce-mcp-net": [],
+      "urumi-store-db-net": [],
+      "urumi-gateway-db-net": [],
+      "urumi-store-provisioner-net": "unchanged; pre-existing TCP 443/6443 rule with no destination selector"
+    },
+    "zeroRoute": false,
+    "serverDryRun": "37 objects accepted, not persisted"
+  },
+  "image": {
+    "tag": "urumi-gateway:chat-egress-20261025T100634Z",
+    "dockerId": "sha256:6104ddbe41eef8851e1789148c8e07e766c6bda915b964c814c69387b33356fc",
+    "testNodeId": "sha256:1b60987eb260d5d007a062b9c183bf908720d5d89072694cbcb3d830fd235bc9",
+    "layersMatch": true,
+    "devNodeHasTag": false,
+    "contains": {
+      "deleteRetryFix": true,
+      "pvcClaimLabels": true,
+      "keepsLiveClaimTemplate": true
+    },
+    "fileHashesMatchWorkingTree": {
+      "service.py": "5cfc4d78175a7435...",
+      "manifests.py": "332ec2c0d9bde83f...",
+      "cluster.py": "648e397276d14958..."
+    }
+  },
+  "intendedGitignoredValuesChange": {
+    "gateway.image.tag": "pvc-labels-20261025T080649Z -> chat-egress-20261025T100634Z",
+    "networkPolicy.gatewayEgressCIDRs": [
+      "104.18.38.236/32",
+      "172.64.149.20/32"
+    ],
+    "unchanged": [
+      "allowExternalEgress false",
+      "storeProvisioner.allowPluginEgress false",
+      "concurrency 1",
+      "chatApiSecret urumi-test-chat"
+    ]
+  },
+  "memory": {
+    "hostAvailableMiB": 2454,
+    "testNodeGiB": 2.856
+  }
+}

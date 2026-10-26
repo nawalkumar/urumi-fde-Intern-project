@@ -1,0 +1,132 @@
+{
+  "generatedAt": "2026-10-25T15:35:42Z",
+  "context": "kind-urumi-k8s-test (read-only for this report)",
+  "scope": "Review of single-store deletion against the acceptance criteria. No store was created, deleted, or modified. No deletion or provisioning request was sent.",
+  "criteriaSource": "docs/verification/multi-store-acceptance.md (85 sub-criteria; deletion behaviour also described in docs/multi-store.md)",
+  "deletionCriteria": {
+    "MS-01d": "Admin deletes in the dashboard",
+    "MS-03j": "Delete removes registration and grants",
+    "MS-03k": "Old tool name is rejected",
+    "MS-04a": "Only that store's registration and grants are removed",
+    "MS-04b": "Namespace removed",
+    "MS-04c": "PVC and PV cleanup is deterministic",
+    "MS-04d": "No orphans after success",
+    "MS-04e": "Repeated delete is safe",
+    "MS-04f": "Interrupted delete can resume",
+    "MS-04g": "Failed delete reports a reason and can retry",
+    "MS-04h": "Other stores and the demo stay",
+    "MS-06f": "Unauthorized create and delete denied",
+    "MS-06g": "Admission denies cross-namespace writes (PV delete limited to st-<16 hex> claims)",
+    "MS-06i": "Provisioner cannot target protected namespaces",
+    "MS-07f": "Deletion survives a restart",
+    "MS-08-11": "Delete Store A from the dashboard",
+    "MS-08-12": "Store A tools disappear from discovery",
+    "MS-08-13": "Old tool name rejected and upstream not called",
+    "MS-08-14": "Namespace, workloads, Secrets, Services, volumes, registry, and grants match the cleanup rules",
+    "MS-08-15": "Store B stays Ready and its list_orders still runs",
+    "MS-08-16": "Audit rows exist for create, chat, delete, and the denied stale call"
+  },
+  "implementation": {
+    "api": "apps/gateway/app/stores/api.py: POST /admin/stores/{id}/delete (session user; 202 deleting, 200 already deleted); GET /admin/stores/{id}/deletion",
+    "ownership": "StoreService.get_owned (service.py:153): wrong owner returns not_found and audits admin:store_denied unauthorized",
+    "request": "StoreService.request_delete (service.py:173): row -> deleting, phase unregister, attempt 0, deadline = now + timeout; revoke_store_grants (store_<id>__*) and delete_upstream before any cluster call; audits admin:delete_store success; repeat on a deleted row re-revokes grants and returns 200",
+    "teardown": "StoreService._teardown (service.py:479): re-deregisters; cluster.delete_namespace; polls namespace_absent; release_store_volumes; only then state deleted",
+    "progressAccounting": "_note_delete_incomplete (service.py:548): attempt counts failed API calls only, capped at max_attempts; a terminating namespace or bound volume is normal progress and reported delete_blocked only after the deadline; retries continue",
+    "clusterGuards": "cluster.py: assert_store_namespace requires st-<store_id> and refuses protected namespaces; delete_namespace and namespace_absent require the urumi.dev/store-id label to match (OwnershipError otherwise, store marked failed without cleanup); release_store_volumes deletes only Released/Failed/Available PVs whose claimRef.namespace is that namespace; Bound/Pending keep the row deleting",
+    "admission": "helm/urumi/templates/store-provisioner-admission.yaml limits provisioner writes to st-<16 hex> namespaces with matching labels and PV deletes to st-<16 hex> claim namespaces",
+    "routing": "stores/routing.py: store tools are callable only when the caller owns a Ready store, so a deleting or deleted store's tools are denied before any upstream call"
+  },
+  "existingLiveEvidence": {
+    "store-a-delete-preflight-blocked-20261025T084750Z.json": {
+      "whatItIs": "A stopped attempt. No delete request was sent.",
+      "proves": ["Preflight state at revision 7 (two Ready stores, 7 PVs, StorageClass reclaim Delete) and a written review of delete semantics."],
+      "doesNotProve": ["Any deletion behaviour. It must not be cited as a deletion or as a safeguard blocking deletion; it stopped because a pre-delete test key was unavailable."]
+    },
+    "store-a-delete-20261025T085339Z.json": {
+      "whatItIs": "One live deletion of Store A (c4421147ea825bbc) through POST /admin/stores/c4421147ea825bbc/delete at 08:51Z on Helm revision 7 (image urumi-gateway:pvc-labels-20261025T080649Z).",
+      "proves": [
+        "Happy path: 202, Deleting, namespace Terminating then absent, row Deleted after about 37 s (MS-04b)",
+        "Store A's two PVs removed by the StorageClass Delete reclaim; the other five PVs kept uid and claim (MS-04c, MS-04d)",
+        "Store A upstream and grant removed; Store B upstream and grant kept (MS-03j, MS-04a)",
+        "All 28 Store B objects kept their uids; Store B Ready; its list_orders succeeded before and after (MS-04h, MS-08-15)",
+        "Removed tool name denied with audit unauthorized and no upstream (MS-03k, MS-08-13)",
+        "Audit rows admin:delete_store success and the denied stale call (part of MS-08-16)"
+      ],
+      "doesNotProve": [
+        "The dashboard delete button (API only) (MS-01d, MS-08-11)",
+        "Repeated delete (MS-04e)",
+        "Resume after a provisioner restart (MS-04f, MS-07f)",
+        "An induced failure and retry (MS-04g); the observed 'That store could not be deleted.' came from a counting defect during normal termination",
+        "Wrong-owner delete denial (MS-06f); only one user exists",
+        "Retain-policy volume sweep: reclaim was Delete, so release_store_volumes found nothing to delete",
+        "Admission denying an out-of-scope delete by the provisioner during teardown",
+        "The deployed delete-retry fix: the run used revision 7 code; the fix shipped in the revision 8 image and is in revision 10, but no deletion has run on it"
+      ]
+    }
+  },
+  "automatedTests": {
+    "run": [
+      ".venv/bin/python -m pytest -q tests/test_stores.py tests/test_store_kube.py tests/test_store_routing.py tests/test_discovery_policy.py tests/test_admin_api.py tests/test_store_manifests.py -> 66 passed",
+      ".venv/bin/python -m pytest -q -rA <same files> -k 'delet or volume or namespace or stale or revok or unowned or another_user or timeout' -> 30 passed",
+      "npx vitest run src/admin/StorePanel.test.tsx (dashboard/) -> 5 passed"
+    ],
+    "isolation": "All deletion tests use FakeCluster or a scripted HTTP opener against https://kubernetes.example. None constructs a real cluster client or reads a kubeconfig.",
+    "notRun": "tests/test_postgres_permissions.py (includes test_store_grant_revoke_keeps_other_prefixes) needs a Docker PostgreSQL; not run in this pass.",
+    "coverage": {
+      "deleteExistingAuthorizedStore": "test_deletion_is_idempotent_and_drops_registration_immediately, test_namespace_absence_completes_a_held_deletion",
+      "wrongOwnerDelete": "test_another_user_cannot_read_or_delete_a_store (also asserts admin:store_denied audit)",
+      "unsafeCleanupBlocked": "test_unowned_namespace_is_not_deleted, test_wrong_store_label_sends_no_delete, test_client_refuses_protected_namespaces_and_hides_the_token, test_guard_rejects_dot_segments[4 cases]",
+      "lifecycleTransitions": "test_accepted_namespace_delete_is_not_completion, test_store_row_stays_deleting_after_http_202_until_the_namespace_is_gone, test_terminating_namespace_times_out_without_claiming_deletion, test_already_absent_namespace_deletes_without_an_attempt",
+      "registrationAndGrants": "test_delete_revokes_only_that_stores_grants, test_missing_namespace_removes_a_stale_registration, test_deleting_store_is_not_called_and_another_store_cannot_be_selected, test_two_store_names_stay_distinct_and_a_revoked_grant_is_not_called",
+      "volumes": "test_volume_cleanup_deletes_only_released_volumes_for_that_store, test_store_stays_deleting_until_volume_cleanup_finishes",
+      "otherStoresPreserved": "test_absent_namespace_delete_does_not_touch_the_other_store, test_failed_namespace_delete_retries_without_exposing_tools_or_the_other_store",
+      "retryAndIdempotency": "test_failed_deletes_stop_at_the_attempt_limit_then_recover, test_duplicate_delete_requests_keep_the_deletion_in_progress, test_deletion_is_idempotent_and_drops_registration_immediately",
+      "dashboard": "StorePanel.test.tsx 'confirms deletion of the named store and renders a failure reason'"
+    },
+    "testGaps": [
+      "No test asserts the admin:delete_store audit row (fields or presence).",
+      "No audit row is written when a deletion completes (state deleted); no test covers that because the code does not do it.",
+      "No test deletes a store while a provisioning pass for it is in flight.",
+      "Resume is tested as a repeated reconcile on a held deletion, not as a worker restart that reloads deleting rows.",
+      "request_delete audits success when the request is accepted even if deregistration failed and will be retried; no test pins that behaviour."
+    ]
+  },
+  "status": {
+    "verifiedByExistingLiveEvidence": ["MS-03j", "MS-03k", "MS-04a", "MS-04b", "MS-04c (Delete reclaim only)", "MS-04d", "MS-04h", "MS-08-12", "MS-08-13", "MS-08-14", "MS-08-15"],
+    "verifiedByAutomatedTestsOnly": ["MS-04e", "MS-04f", "MS-04g", "MS-06f", "MS-07f", "Retain-volume sweep", "ownership and protected-namespace refusal during teardown"],
+    "partial": ["MS-01d and MS-08-11 (API, not dashboard button)", "MS-08-16 (no chat row in that run; delete completion is not separately audited)", "MS-06g and MS-06i (admission denial shown for one ConfigMap create in default, not for a delete)"],
+    "notVerifiedLive": [
+      "Dashboard delete button on the cluster",
+      "Repeated delete on the cluster",
+      "Provisioner restart during Deleting",
+      "Induced delete failure and recovery on the deployed fix (revision 8+)",
+      "Wrong-owner delete on the cluster (needs a second user)",
+      "Retain-policy volume sweep (cluster StorageClass is Delete)",
+      "Any deletion on revision 10"
+    ]
+  },
+  "nextSafeDemonstration": {
+    "requiresSeparateApproval": true,
+    "summary": "One disposable store owned by the existing admin (cap is 3; the owner has 2 active stores), created and deleted through the dashboard on revision 10. Store B and Store C are never targeted.",
+    "capacity": "Per-store requests are about WordPress 256Mi, MariaDB 256Mi, MCP 64Mi plus an init Job. Node is about 3.07 GiB of 7.58 GiB; host available about 2.2 GiB. Stop if host available falls below 1500 MiB or the node exceeds 4.5 GiB.",
+    "steps": [
+      "Preflight: release revision 10 deployed; Store B and C Ready; record uids of all Store B/C objects, all 7 PVs, upstream rows, grants, audit max id; memory gates.",
+      "Create store 'disposable-delete-demo' from the dashboard form; record the returned store id; confirm it is not 174c75b6c0ef57e5 or 5bc7dc01da3ccf38 and its namespace is st-<new id> with the matching store-id label; wait for Ready.",
+      "Optional, needs approval: create a member user and confirm its delete request for the new store returns not found and audits admin:store_denied.",
+      "Delete from the dashboard button, confirming the dialog names the new store; poll GET /admin/stores/<new id>/deletion.",
+      "Send the same delete again while Deleting (expect 202, no second attempt counted).",
+      "While the namespace is Terminating, restart only the provisioner (kubectl --context kind-urumi-k8s-test -n default rollout restart deploy/urumi-store-provisioner) and confirm the new pod resumes and the row reaches Deleted without delete_blocked.",
+      "Verify: namespace absent; no PV with claimRef.namespace st-<new id>; upstream row and store_<new id>__* grants gone; tools/list omits the store; a call to store_<new id>__list_orders is denied with no upstream; audit rows admin:create_store, admin:delete_store, and the denied call.",
+      "Verify Store B and C: same object uids, Ready, 0 restarts, same 7 PVs, upstreams and grants unchanged; one authorized list_orders on each if a new short-lived key is approved.",
+      "Write a new evidence file; do not modify earlier evidence."
+    ],
+    "guards": [
+      "Every kubectl and helm command names --context or --kube-context kind-urumi-k8s-test.",
+      "Before each destructive request, compare the target store id against an allowlist containing only the new id.",
+      "No kubectl delete of namespaces, PVCs, or PVs by hand.",
+      "Abort and leave the store in place if the new id is ambiguous or any Store B/C uid changes."
+    ]
+  },
+  "mutations": "none; read-only queries and non-destructive tests only",
+  "secretsPrinted": false
+}

@@ -51,7 +51,9 @@ Each Dockerfile uses the repository root as its build context. Both stages use `
 
 The runtime user is `urumi`, UID and GID 10001. Local images can be built from these Dockerfiles. Installing or upgrading the chart is a separate, reviewed step. Do not treat a previous local cluster as updated with later source changes until its image tags are rebuilt and a reviewed upgrade is applied.
 
-## Kind image update on 2026-10-19
+## Kind image update on 2026-10-19 (dev cluster history)
+
+This section and the next describe `kind-urumi-k8s-dev` only. The `kind-urumi-k8s-test` release is managed with `helm upgrade` and a gitignored overlay; see "Upgrade and rollback" below and `docs/verification/multi-store-acceptance.md`.
 
 Helm release `urumi` on `kind-urumi-k8s-dev` is still revision 1, installed on 2026-10-12. Its stored application tags are `k8s-test`. That cluster was not updated with `helm upgrade`.
 
@@ -97,7 +99,7 @@ kubectl --context kind-urumi-k8s-dev -n default set image deployment/urumi-dashb
 kubectl --context kind-urumi-k8s-dev -n default rollout status deployment/urumi-dashboard
 ```
 
-Do not use `helm upgrade` or `helm rollback` for this update. Helm release `urumi` is still revision 1, `values-dev.yaml` still sets the gateway tag to `chat-20261018`, and `networkPolicy.probeCIDRs` is still `172.19.0.3/32`. The live gateway image is `urumi-gateway:grants-msg-20261019`, and the live NetworkPolicies allow `172.19.0.2/32`. Either Helm command can replace that gateway image and change the probe CIDR.
+Do not use `helm upgrade` or `helm rollback` for this update on `kind-urumi-k8s-dev`. Helm release `urumi` there is still revision 1, `values-dev.yaml` still sets the gateway tag to `chat-20261018`, and `networkPolicy.probeCIDRs` is still `172.19.0.3/32`. The live gateway image is `urumi-gateway:grants-msg-20261019`, and the live NetworkPolicies allow `172.19.0.2/32`. Either Helm command can replace that gateway image and change the probe CIDR.
 
 ## Secrets
 
@@ -239,7 +241,44 @@ Generate `GATEWAY_UPSTREAM_KEY` with `openssl rand -base64 32`. On a VPS, create
 
 ## Rollback
 
-`helm uninstall` removes workloads but the PostgreSQL, MariaDB, and WordPress claims use `helm.sh/resource-policy: keep` and the StatefulSets use `persistentVolumeClaimRetentionPolicy: Retain`. That does not save you from `kubectl delete pvc` or from a StorageClass whose reclaim policy is `Delete`. Do not add a hook that deletes those claims. The init Job's hook policy deletes only the finished Job before the next one starts. `helm upgrade` runs that Job again. It does not reinstall WordPress or update WordPress core when the site is already installed. It enables Cash on delivery again when `store.demoPayment` is `cod`. Changing a database password in a Secret does not rewrite a password already stored in an initialized data directory. Take a volume backup before an upgrade or rollback. This chart has not been upgraded in a cluster.
+`helm uninstall` removes workloads but the PostgreSQL, MariaDB, and WordPress claims use `helm.sh/resource-policy: keep` and the StatefulSets use `persistentVolumeClaimRetentionPolicy: Retain`. That does not save you from `kubectl delete pvc` or from a StorageClass whose reclaim policy is `Delete`. Do not add a hook that deletes those claims. The init Job's hook policy deletes only the finished Job before the next one starts. `helm upgrade` runs that Job again. It does not reinstall WordPress or update WordPress core when the site is already installed. It enables Cash on delivery again when `store.demoPayment` is `cod`. Changing a database password in a Secret does not rewrite a password already stored in an initialized data directory. Take a volume backup before an upgrade or rollback. On `kind-urumi-k8s-test`, Helm upgrades are recorded through revision 11; no rollback execution is recorded in the saved evidence. The `kind-urumi-k8s-dev` release was last recorded at revision 1 on 2026-10-24 (`docs/verification/repository-findings.md`).
+
+## Upgrade and rollback
+
+Documentation only. These commands were not executed as part of the 2026-10-26 documentation pass. Replace `<context>`, `<values-file>`, and `<revision>` before use.
+
+Rendered manifests and private values files can contain Secret `stringData`, passwords, or keys. Do not write a render to disk as a routine check, and do not paste a render or a private values file into logs, tickets, chat, or a public repository.
+
+```bash
+# Read-only checks first.
+kubectl --context <context> get pods -A
+helm history urumi --kube-context <context> -n default
+# Prints only a count. Expect 0 before any install. Does not render the chart.
+grep -c 'replace-me' <values-file>
+# Upgrade. --timeout 20m covers first database startup.
+helm upgrade urumi helm/urumi --kube-context <context> -n default --timeout 20m -f <values-file>
+kubectl --context <context> -n default rollout status deployment/urumi-gateway
+# Roll back to an earlier revision from helm history.
+helm rollback urumi <revision> --kube-context <context> -n default --timeout 20m
+```
+
+Before either command, record the PersistentVolume names and claims and take a backup. After it, confirm the same volumes are still Bound, gateway `/health` returns `{"status":"ok"}`, and store namespaces are unchanged. A rollback restores chart objects and image tags. It does not undo database rows, store namespaces created by the provisioner, or WordPress data. `imagePullPolicy: IfNotPresent` means a rolled-back tag must still be present on the node.
+
+## Local to VPS outline
+
+Documentation only. No VPS install has been done. `values-vps.yaml` is a worksheet of `replace-me` placeholders, not a verified deployment.
+
+1. Provision a k3s or other Kubernetes 1.27+ node with a NetworkPolicy-enforcing CNI. Record the CNI.
+2. Push the five application images to a registry the node can pull from, tagged from a clean commit. Record the tags and digests.
+3. Install an ingress controller and point DNS for the store, gateway, and dashboard hosts at it. Create a TLS Secret or use cert-manager.
+4. Create the database, store, upstream-key, chat, and WooCommerce Secrets with `kubectl create secret`. Do not commit them.
+5. Copy `values-vps.yaml` to the gitignored `values-vps.local.yaml` and replace every `replace-me`: image repositories and tags, hosts, TLS Secret, storage class, ingress class and namespace, Secret names, and a captured `networkPolicy.probeCIDRs`.
+6. Run `grep -c 'replace-me' helm/urumi/values-vps.local.yaml` and continue only when it prints `0`. That prints a count, not the file's contents. Then `helm upgrade --install urumi helm/urumi -f helm/urumi/values-vps.local.yaml --timeout 20m`.
+7. Create the first administrator with `python -m apps.gateway.provision create-admin` in the gateway pod, writing the password to a file outside the repository.
+8. After the init Job, create the WooCommerce REST key in wp-admin, put it in the WooCommerce Secret, and restart the WooCommerce MCP pod.
+9. Verify health, Ingress, a granted tool call, and NetworkPolicy denial before calling it deployed.
+
+Local Kind and the VPS use the same chart. The differences are the values file, the images' registry location, the ingress controller, TLS, and the StorageClass.
 
 ## Values files
 
@@ -263,8 +302,8 @@ Use a private values file instead of `values-vps.yaml` until every `replace-me` 
 
 ## Multi-store provisioner
 
-`storeProvisioner.enabled` and `storeProvisioner.admit` default to false. Helm fails the render when `enabled` is true and `admit` is false. While both are false, this chart does not render a provisioner ServiceAccount, ClusterRole, admission policy, or Deployment, and the gateway ServiceAccount does not change. `values-dev.yaml` does not set the flags. Do not `helm upgrade` the live release to turn them on.
+`storeProvisioner.enabled` and `storeProvisioner.admit` default to false. Helm fails the render when `enabled` is true and `admit` is false, or the reverse. While both are false, this chart does not render a provisioner ServiceAccount, ClusterRole, admission policy, or Deployment, and the gateway ServiceAccount does not change. `values-dev.yaml` does not set the flags. Do not `helm upgrade` the `kind-urumi-k8s-dev` release to turn them on. On `kind-urumi-k8s-test` both are true through a gitignored overlay.
 
-When both are true, the chart renders a separate provisioner Deployment with that ServiceAccount. The public gateway keeps its own account and does not mount the provisioner token. The ClusterRole limits secret get and update to `store-db` and `woocommerce-credentials`, and it does not grant patch or a general delete on Secrets, claims, Deployments, or StatefulSets. Namespace delete remains on the ClusterRole because RBAC cannot limit it to `st-<id>`. `store-provisioner-admission.yaml` is the separate write boundary and fails closed. That policy has not been enforced on a cluster, so the provisioner is still unsafe to enable on the live release. The gateway label `urumi.dev/gateway: allowed` and the gateway NetworkPolicy egress to `urumi.dev/store: "true"` are added only in that same render.
+When both are true, the chart renders a separate provisioner Deployment with that ServiceAccount. The public gateway keeps its own account and does not mount the provisioner token. The ClusterRole limits secret get and update to `store-db` and `woocommerce-credentials`, and it does not grant patch or a general delete on Secrets, claims, Deployments, or StatefulSets. Namespace delete remains on the ClusterRole because RBAC cannot limit it to `st-<id>`. `store-provisioner-admission.yaml` is the separate write boundary and fails closed. On `kind-urumi-k8s-test` it is installed and denied one out-of-scope dry-run write; other protected operations were not tried, and the policy reports CEL type-check warnings (see `docs/multi-store.md`). When `storeProvisioner.apiServerEgress` is empty, the provisioner NetworkPolicy allows TCP 443 and 6443 to any destination; set it to the API server addresses. The gateway label `urumi.dev/gateway: allowed` and the gateway NetworkPolicy egress to `urumi.dev/store: "true"` are added only in that same render.
 
 Per-store WordPress, MariaDB, MCP, policy, quota, and claim objects are built by `apps/gateway/app/stores/manifests.py`. They are not templates in this chart, so a Helm upgrade of the demo release does not create them. `docs/multi-store.md` describes the lifecycle and the disposable-cluster prerequisites.

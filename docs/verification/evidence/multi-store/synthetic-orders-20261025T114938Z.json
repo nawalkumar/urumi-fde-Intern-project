@@ -1,0 +1,104 @@
+{
+  "criterion": "MS-08-6",
+  "context": "kind-urumi-k8s-test",
+  "approval": "Owner approved the fee-only REST order path after the read-only preflight.",
+  "method": {
+    "endpoint": "POST /wp-json/wc/v3/orders",
+    "runner": "kubectl exec deploy/woo-mcp in each store namespace, using apps.woocommerce_mcp.app.client.WooClient with the pod's own credentials",
+    "guard": "GET /orders first; abort if any order exists. No retry on error.",
+    "body": {
+      "status": "pending",
+      "set_paid": false,
+      "customer_note": "<marker>",
+      "fee_lines": [{"name": "<marker>", "total": "<total>", "tax_status": "none"}],
+      "meta_data": [{"key": "urumi_acceptance_marker", "value": "<marker>"}]
+    },
+    "why_not_create_order_tool": "Both stores had 0 products. The MCP create_order tool requires a published simple product, and WooCommerce REST rejects a line item without a product ID or SKU.",
+    "date": "date_created is read-only in the WooCommerce 9.4.3 REST schema. The order takes the server creation time. Store timezone is UTC (gmt_offset 0, empty timezone_string), so today is 2026-10-25."
+  },
+  "preflight": {
+    "both_stores": {
+      "pods_ready_restarts_0": true,
+      "init_job_succeeded": true,
+      "mcp_health": {"status": "ok", "woocommerce_api": "configured"},
+      "mariadb": "11.4.13, mysqld is alive",
+      "woocommerce_version": "9.4.3",
+      "hpos_enabled": false,
+      "currency": "USD",
+      "calc_taxes": "no",
+      "orders": 0,
+      "products": 0,
+      "customers": 0,
+      "rest_key": "one read_write row for user 1",
+      "mcp_credentials_match_store_key_row": true,
+      "credential_fingerprints_differ_between_stores": true
+    }
+  },
+  "orders": {
+    "174c75b6c0ef57e5": {
+      "store_name": "acceptance-store-b",
+      "namespace": "st-174c75b6c0ef57e5",
+      "marker": "URUMI-MS08-6-STORE-B-174c75b6c0ef57e5-20261025",
+      "order_id": 10,
+      "status": "pending",
+      "total": "11.00",
+      "currency": "USD",
+      "date_created": "2026-10-25T11:49:11",
+      "date_created_gmt": "2026-10-25T11:49:11",
+      "customer_id": 0,
+      "date_paid": null,
+      "payment_method": "",
+      "line_items": 0,
+      "fee_lines": [["URUMI-MS08-6-STORE-B-174c75b6c0ef57e5-20261025", "11.00"]]
+    },
+    "5bc7dc01da3ccf38": {
+      "store_name": "acceptance-store-c",
+      "namespace": "st-5bc7dc01da3ccf38",
+      "marker": "URUMI-MS08-6-STORE-C-5bc7dc01da3ccf38-20261025",
+      "order_id": 10,
+      "status": "pending",
+      "total": "22.00",
+      "currency": "USD",
+      "date_created": "2026-10-25T11:49:38",
+      "date_created_gmt": "2026-10-25T11:49:38",
+      "customer_id": 0,
+      "date_paid": null,
+      "payment_method": "",
+      "line_items": 0,
+      "fee_lines": [["URUMI-MS08-6-STORE-C-5bc7dc01da3ccf38-20261025", "22.00"]]
+    }
+  },
+  "verification": {
+    "database_each_store": "Exactly one shop_order (ID 10, wc-pending, post_date 2026-10-25), the marker in postmeta and in the single fee order item, 0 products, 0 customers, one read_write API key row. Only last_access changed on the key row.",
+    "mcp_list_orders_window": {
+      "after": "2026-10-25T00:00:00+00:00",
+      "before": "2026-10-26T00:00:00+00:00",
+      "174c75b6c0ef57e5": "id=10 status=pending total=11.00 currency=USD created=2026-10-25T11:49:11",
+      "5bc7dc01da3ccf38": "id=10 status=pending total=22.00 currency=USD created=2026-10-25T11:49:38"
+    },
+    "cross_store": "Each store's order list contains only its own marker.",
+    "pods_after": "All store pods Ready with 0 restarts.",
+    "gateway_after": "Both stores ready at attempt 0, both upstreams enabled, grants unchanged."
+  },
+  "note": "Both stores assigned order ID 10. Distinguish them by store tool and by total (11.00 vs 22.00 USD).",
+  "follow_up_grant": {
+    "approval": "Owner approved granting Store C list_orders to key 013b6aeafe9ea69c and chose the dashboard path.",
+    "path": "Dashboard Admin > API keys > Grant, which calls POST /admin/keys/013b6aeafe9ea69c/permissions with the owner check",
+    "performed_by": "owner in the dashboard session; the agent only verified",
+    "audit_row": {
+      "id": 39,
+      "occurred_at": "2026-10-25T12:05:04.131627Z",
+      "actor": "169d3b25942f065b",
+      "tool_name": "admin:grant_permission",
+      "outcome": "success",
+      "target": "013b6aeafe9ea69c store_5bc7dc01da3ccf38__list_orders"
+    },
+    "grants_after": {
+      "013b6aeafe9ea69c": ["store_174c75b6c0ef57e5__list_orders", "store_5bc7dc01da3ccf38__list_orders"],
+      "bfca9a84d7b4380d": "revoked at 08:50:41Z; its old Store B row is inert"
+    },
+    "key_owner_matches_store_owner": true,
+    "stores_after": "Both ready at attempt 0."
+  },
+  "secrets_printed": false
+}

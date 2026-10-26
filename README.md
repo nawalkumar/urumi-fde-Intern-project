@@ -15,7 +15,7 @@ This repository is the source tree. A Docker Compose project and a Kubernetes/Ki
 - Dashboard administration: users, roles, API keys, exact grants, upstream registration, collision diagnostics, and audit history.
 - Optional dashboard chat that calls tools only through the same dispatcher, using one of the signed-in user's live keys.
 - WooCommerce product and order tools when the store REST API is configured. `woocommerce__create_order` creates an unpaid pending order in the WooCommerce MCP process. It is not production checkout.
-- Optional multi-store provisioning stays disabled. `storeProvisioner.enabled` and `storeProvisioner.admit` are both false, and the dev values file was not changed. A store row can be saved, but a separate provisioner process applies the Kubernetes objects. The public gateway does not. Helm renders that process only when both flags are true. The admission policy has to be installed and enforced before provisioning is turned on. The provisioner ClusterRole can delete namespaces and is not limited to names `st-<id>`. Creating a store does not grant its tools. See `docs/multi-store.md`.
+- Optional multi-store provisioning. It is off in the chart defaults: `storeProvisioner.enabled` and `storeProvisioner.admit` are false in `values.yaml`, and `values-dev.yaml` does not set them. On `kind-urumi-k8s-test` both flags are on through a gitignored overlay, the admission policy is installed, and stores were created, isolated, and deleted there (`docs/verification/multi-store-acceptance.md`). The gateway saves a store row; a separate provisioner process applies the Kubernetes objects. Helm renders that process only when both flags are true. The provisioner ClusterRole can create and delete namespaces cluster-wide, so the ValidatingAdmissionPolicy is the boundary that limits writes to `st-<16 hex>`. Creating a store does not grant its tools. See `docs/multi-store.md`.
 
 ## Architecture
 
@@ -139,7 +139,8 @@ apps/woocommerce_mcp/  WooCommerce MCP server
 dashboard/             Vite administration and status UI
 tests/                 Gateway pytest suite
 helm/urumi/            Kubernetes chart
-deploy/wordpress/      Compose store init script
+deploy/wordpress/      Compose store init script and the WooCommerce WordPress image
+docs/                  Design, threat model, multi-store, trackers, verification evidence
 compose.yaml           Local Compose project
 ```
 
@@ -256,11 +257,26 @@ WooCommerce product and order tools register only when `WOOCOMMERCE_BASE_URL`, `
 
 ## Kubernetes
 
+### Two local clusters
+
+Evidence in this repository comes from two different Kind clusters. Do not mix them up.
+
+| Cluster | What runs there | What it demonstrates |
+| --- | --- | --- |
+| `kind-urumi-k8s-test` | Helm release `urumi` revision 11 (2026-10-26). Gateway and provisioner `urumi-gateway:discovery-import-20261026T082546Z`. Support, Utility, and WooCommerce MCP `disposable-pkg-20261024`. Dashboard `urumi-dashboard:disposable-pkg-20261024`. Values come from a gitignored overlay. | Multi-store provisioning, isolation, deletion, least-privilege denial, an external MCP client. On 2026-10-26 the gateway, provisioner, and MCP pods were hash-checked against this tree and matched. The dashboard image predates the staged dashboard source. |
+| `kind-urumi-k8s-dev` | Release `urumi` revision 1 with images older than this tree (`partial-20261019`, as last recorded on 2026-10-24 in `docs/verification/repository-findings.md`; not re-inspected since). | The base demo on 2026-10-18: storefront checkout, chat with Groq, two users, rejection of a revoked key, disable, dead pod, Calico enforcement, `.local` Ingress (`docs/assignment-tracker.md`). |
+
+The test cluster has no ingress controller. It is reached through local port-forwards: dashboard `127.0.0.1:18081` to `svc/urumi-dashboard`, gateway `127.0.0.1:18082` to `svc/urumi-gateway`, and storefront `127.0.0.1:18080` to `svc/urumi-wordpress`. `docs/SUBMISSION_TRACKER.md` records what is and is not demonstrated on each cluster.
+
+### Dev cluster notes
+
 `helm/urumi/README.md` is the chart guide. `values-dev.yaml` is the local overlay for `kind-urumi-k8s-dev`. Its image tags are gateway `chat-20261018`, dashboard `module5-20261018`, and Support, Utility, and WooCommerce MCP `k8s-test`. `docs/assignment-tracker.md` records, on 2026-10-19, gateway image `urumi-gateway:partial-20261019` and dashboard image `urumi-dashboard:partial-20261019`. The recorded rollback images are `urumi-gateway:grants-msg-20261019` and `urumi-dashboard:module5-20261018`. Those are recorded historical states, not a verified current cluster inspection, and they are not this checkout. Earlier notes in `helm/urumi/README.md`, `docs/threat-model.md`, and `docs/baseline-verification.md` still name `urumi-gateway:grants-msg-20261019` as the image running earlier that day. The tracker is the later record. Do not `helm upgrade` with the current `values-dev.yaml`: that file's gateway tag and `networkPolicy.probeCIDRs` disagree with the tags and policies recorded in the tracker. The commands are in the chart guide. HTTP hosts are `store.local`, `gateway.local`, and `dashboard.local`. The tracker also records, on 2026-10-19, dev node InternalIP `172.19.0.2`, test node InternalIP `172.19.0.3`, and NetworkPolicy objects that allowed `172.19.0.2/32`. `networkPolicy.probeCIDRs` in `values-dev.yaml` is still `172.19.0.3/32`. Neither CIDR is a verified kubelet probe source, because that source IP has not been captured. The values file was not applied. This paragraph was not checked against the cluster. `docs/assignment-tracker.md` Modules 9 and 10 keep the addresses recorded for those 2026-10-18 checks. `values-vps.yaml` is a worksheet of `replace-me` placeholders. It has not been deployed. It is not a production configuration, and it does not provide TLS or a registry.
 
 The chart does not install an Ingress controller. On the dev Kind cluster, `ingress-nginx` is installed separately and the node is labeled `ingress-ready=true`. The controller listens on port 80 inside the dev node. Docker does not publish the dev node's port 80. Host ports 80 and 443 are published by `urumi-k8s-test-control-plane`.
 
-`scripts/dev-port80-forward.py` runs in container `urumi-dev-port80`, which shares the test node's network namespace and forwards TCP port 80 to the dev node at `172.19.0.2`. The Windows hosts file maps all three names to `127.0.0.1`:
+The forwarder description below is a historical observation from 2026-10-18 and 2026-10-19. The current dev-cluster node address and the forwarder's state have not been rechecked since. Verify both with read-only commands before recording a demo on this path. Kind node addresses can change when the nodes restart.
+
+As recorded on 2026-10-19, `scripts/dev-port80-forward.py` ran in container `urumi-dev-port80`, which shared the test node's network namespace and forwarded TCP port 80 to the dev node, then at `172.19.0.2`. The Windows hosts file maps all three names to `127.0.0.1`:
 
 ```
 127.0.0.1    store.local
@@ -268,7 +284,7 @@ The chart does not install an Ingress controller. On the dev Kind cluster, `ingr
 127.0.0.1    gateway.local
 ```
 
-A browser on this laptop then opens `http://store.local/`, `http://dashboard.local/`, and `http://gateway.local/health`. On 2026-10-19 those three routes returned HTTP 200 through the dev node and through the forwarder. WordPress `home` and `siteurl` stay `http://store.local`. Recheck the dev node address with `kubectl get nodes -o wide` before replacing the forwarder. The running forwarder already targets `172.19.0.2`. If that address changes, replace the container:
+A browser on this laptop then opens `http://store.local/`, `http://dashboard.local/`, and `http://gateway.local/health`. On 2026-10-19 those three routes returned HTTP 200 through the dev node and through the forwarder. WordPress `home` and `siteurl` stay `http://store.local`. On 2026-10-19 the forwarder targeted `172.19.0.2`; whether it still runs, and which address it targets, has not been rechecked. Read the current dev node address with `kubectl --context kind-urumi-k8s-dev get nodes -o wide` before relying on the forwarder. If the address differs, replace the container:
 
 ```bash
 docker rm -f urumi-dev-port80
@@ -296,9 +312,9 @@ helm template urumi helm/urumi -f helm/urumi/values-vps.yaml
 
 Do not run `helm install` or `helm upgrade` until image tags, Secrets, storage, DNS, and the ingress controller have been reviewed. PersistentVolumeClaims for PostgreSQL, MariaDB, and WordPress are retained by default. Deleting a claim, or a StorageClass with reclaim policy `Delete`, can still destroy data.
 
-There is no separate production deployment in this repository beyond that VPS worksheet.
+There is no separate production deployment in this repository beyond that VPS worksheet. `helm/urumi/README.md` "Local to VPS outline" and "Upgrade and rollback" describe the path. Those commands are documentation only and were not run for this documentation. No VPS install is recorded. On `kind-urumi-k8s-test`, Helm upgrades are recorded through revision 11; no rollback execution is recorded in the saved evidence.
 
-Additional stores are not part of that Helm release. Both provisioner flags stay false. A separate provisioner would apply store objects, and only after the admission policy is installed. That has not been done. `docs/multi-store.md` describes the lifecycle. No store was created on `kind-urumi-k8s-dev`. `scripts/disposable-store-acceptance.sh` has not been executed.
+Additional stores are not part of the demo Helm release's templates. On `kind-urumi-k8s-test` the provisioner and admission policy are installed and stores were provisioned and deleted (`docs/verification/multi-store-acceptance.md`). No store was created on `kind-urumi-k8s-dev`, and its release does not enable the provisioner. `scripts/disposable-store-acceptance.sh --unit` was run; `--execute` was not. The test-cluster pass used reviewed manual commands instead.
 
 ## Security
 
@@ -313,10 +329,10 @@ Additional stores are not part of that Helm release. Both provisioner flags stay
 ## Limitations
 
 - Discovery search matches tokens in the public name, upstream id, and description. It does not match synonyms, and it was exercised with in-process fakes rather than the dev cluster.
-- Multi-store provisioning stays off. `storeProvisioner.enabled` and `storeProvisioner.admit` are false. Helm renders the provisioner only when both are true. The admission policy is not installed on a cluster. It has to be installed and enforced before provisioning is enabled. RBAC does not limit namespace deletion to `st-<id>`. Store manifest and unit tests check rendered objects and in-process behavior. They do not show runtime cross-store isolation, and they do not prove that NetworkPolicies are enforced. The disposable-cluster acceptance script has not been run. See `docs/multi-store.md`.
+- Multi-store provisioning is off by default and on only in the gitignored test-cluster overlay. RBAC does not limit namespace create or delete to `st-<id>`; the admission policy does. On the test cluster one server dry-run write outside `st-<id>` was denied. Namespace delete, Secret create, and volume delete outside the store scope were not tried. The policy status reports CEL type-check warnings on its persistent-volume branch. Cross-store packet tests passed on the test cluster, but each denied source also had restrictive egress, and the captured node address `/32` may reach every store's WordPress and unauthenticated store MCP port. See `docs/multi-store.md` and `docs/verification/multi-store-acceptance.md`.
 - The audit insert is not in the same database transaction as the mutation. A crash after the commit, or a failed audit insert, can leave a committed change without the expected audit row. `Auditor.record` logs the exception type and does not change the HTTP result.
 - Registry refresh compensation undoes the upstream write when it can. It is not a single transaction wrapped around the in-process refresh.
-- Dashboard chat tests mock the model provider. On `kind-urumi-k8s-dev`, Secret `urumi-dev-chat` was used for live Groq chat on 2026-10-18. That key is not in the repository. Without it, `POST /admin/chat` returns 503. The recorded calls created products 17 and 19 and listed live orders. See `docs/assignment-tracker.md`.
+- Dashboard chat tests mock the model provider. On `kind-urumi-k8s-dev`, Secret `urumi-dev-chat` was used for live Groq chat on 2026-10-18; those calls created products 17 and 19 and listed live orders (`docs/assignment-tracker.md`). On `kind-urumi-k8s-test`, a dashboard chat on the revision 9 image called both store `list_orders` tools (audit rows 40–42, 2026-10-25); its answer text was not captured. Chat tool calling has not been demonstrated on revision 11. No provider key is in the repository. Without it, `POST /admin/chat` returns 503.
 - Resource requests in the chart are placeholders, not a measured capacity plan.
 - Unit tests do not prove that a running cluster is serving this checkout. The dev-cluster checks recorded in `docs/assignment-tracker.md` say Calico v3.30.2 enforced NetworkPolicy on `kind-urumi-k8s-dev` (the gateway reached WooCommerce MCP; Support and Utility timed out). That note is not a new cluster inspection, and it is not what the store manifest tests prove. Those tests render objects. A node rebuild can put Kindnet back, and Kindnet does not enforce NetworkPolicy.
 - `values-vps.yaml` is unverified as a deployment. `helm lint` and `helm template` of that file are not a VPS install. No registry, DNS name, TLS certificate, or `helm upgrade` is recorded. A VPS deployment has not been done.
@@ -332,6 +348,30 @@ Additional stores are not part of that Helm release. Both provisioner flags stay
 
 ## Status
 
-Implemented in this source tree: gateway authentication, grants, namespaced tools, collision exclusion, upstream enablement, admin sessions, audit of successful admin mutations, upstream diagnostics in the dashboard, and compensation when registry refresh fails after an upstream write.
+`docs/SUBMISSION_TRACKER.md` is the full tracker. Summary:
 
-Recorded on the local Kind cluster, and not a production deploy: Ingress on `store.local`, `dashboard.local`, and `gateway.local`, Calico NetworkPolicy enforcement, and live chat tool calls. Not claimed: that this checkout is what the cluster is running now, that `values-vps.yaml` is production-ready, that TLS or a VPS exists, or that a live card checkout exists.
+- **Implemented in source:** gateway authentication, exact grants, namespaced tools, collision exclusion, upstream enablement, admin sessions and roles, audit, grant-filtered discovery, dashboard chat, WooCommerce MCP tools, multi-store provisioning, and compensation when registry refresh fails after an upstream write.
+- **Covered by automated tests (2026-10-26):** `uv run pytest` 327 passed without the two Docker-backed files, and 17 passed in those files. Dashboard Vitest 34 passed. `tsc --noEmit` clean. `helm lint` clean with placeholder passwords.
+- **Demonstrated on `kind-urumi-k8s-test`:** multi-store create, Ready, registration, isolation, quota enforcement, and deletion; denied tool calls that do not contact an upstream; an external MCP client (Cursor) calling two store upstreams; one recorded admission dry-run denial.
+- **Demonstrated only on the older `kind-urumi-k8s-dev` deployment (2026-10-18):** storefront COD checkout, chat-created products, the two-user flow, rejection of a revoked key, disable, dead-pod isolation, Calico enforcement, and `.local` Ingress.
+- **Not demonstrated:** chat tool calling on revision 11, the two-user flow on the current build, the staged dashboard UI on a cluster, live collision exclusion, upstream add, edit, and remove on the current build, dead-pod and timeout behavior on the current build, the member API-key flow, a live `update_order_status` call, a VPS install, a Helm rollback (none is recorded in the saved evidence), and a live card checkout. The complete list is in `docs/SUBMISSION_TRACKER.md` section 7.
+- **API-key revocation:** test-cluster audit evidence records revoke actions. Rejection of a revoked key on the next call was demonstrated only on the older `kind-urumi-k8s-dev` deployment. A post-revocation authentication test has not been run on the current build.
+
+## Environment variables
+
+Names only. Values belong in `.env` (gitignored), a Kubernetes Secret, or a gitignored values file. `.env.example` has placeholders.
+
+| Area | Names |
+| --- | --- |
+| Gateway database | `GATEWAY_DATABASE_URL`, `GATEWAY_DB_PASSWORD` (Compose) |
+| Upstreams | `SUPPORT_MCP_URL`, `UTILITY_MCP_URL`, `WOOCOMMERCE_MCP_URL`, `SUPPORT_MCP_ENABLED`, `UTILITY_MCP_ENABLED`, `WOOCOMMERCE_MCP_ENABLED`, `UPSTREAM_TIMEOUT_SECONDS`, `UPSTREAM_ALLOW_PRIVATE`, `UPSTREAM_TRUST_ENVIRONMENT` |
+| Upstream credential sealing | `GATEWAY_UPSTREAM_KEY`, `GATEWAY_UPSTREAM_KEY_PREVIOUS` |
+| Sessions and status | `GATEWAY_COOKIE_SECURE`, `GATEWAY_STATUS_PERMISSION` |
+| Chat | `CHAT_API_KEY`, `CHAT_API_URL`, `CHAT_MODEL`, `CHAT_MAX_TOOL_CALLS`, `CHAT_PROVIDER_TIMEOUT_SECONDS` |
+| WooCommerce MCP | `WOOCOMMERCE_BASE_URL`, `WOOCOMMERCE_SITE_URL`, `WOOCOMMERCE_CONSUMER_KEY`, `WOOCOMMERCE_CONSUMER_SECRET`, `WOOCOMMERCE_TIMEOUT_SECONDS` |
+| Compose store | `MARIADB_ROOT_PASSWORD`, `WORDPRESS_DB_NAME`, `WORDPRESS_DB_USER`, `WORDPRESS_DB_PASSWORD`, `WORDPRESS_URL`, `WORDPRESS_TITLE`, `WORDPRESS_ADMIN_USER`, `WORDPRESS_ADMIN_PASSWORD`, `WORDPRESS_ADMIN_EMAIL` |
+| Multi-store provisioner | `STORE_PROVISIONER_ENABLED`, `STORE_CLUSTER_RECONCILER`, `STORE_MAX_PER_USER`, `STORE_PROVISION_TIMEOUT_SECONDS`, `STORE_PROVISION_CONCURRENCY`, `STORE_PROVISION_MAX_ATTEMPTS`, `STORE_INGRESS_BASE_DOMAIN`, `STORE_ALLOW_PLUGIN_EGRESS`, `STORE_STORAGE_CLASS`, `STORE_PROBE_CIDRS` |
+
+## Demo video and submission
+
+The recording plan, the walkthrough order with what can and cannot be shown today, the GitHub checklist, and the pending commit, push, and form steps are in `docs/SUBMISSION_TRACKER.md` sections 5–7. Nothing in that file has been recorded, pushed, or submitted yet.

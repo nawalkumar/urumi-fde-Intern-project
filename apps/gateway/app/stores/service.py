@@ -3,6 +3,8 @@
 The HTTP handler stores the row and returns. Reconciliation is a separate
 task. A restart reads provisioning and deleting rows and continues. Cleanup
 deletes only the namespace whose name and store-id label match the row.
+An accepted namespace DELETE is not completion. The row stays deleting until
+a later read says that namespace is gone.
 """
 
 import asyncio
@@ -73,6 +75,9 @@ class StoreService:
         now=None,
         refresh=None,
         cluster_reconciler: bool | None = None,
+        sleep=None,
+        delete_poll_seconds: float = 0.2,
+        delete_wait_seconds: float = 1.0,
     ) -> None:
         self.store = store
         self.registry = registry
@@ -80,7 +85,12 @@ class StoreService:
         self.cluster = cluster
         self.autostart = autostart
         self.cluster_reconciler = cluster is not None if cluster_reconciler is None else cluster_reconciler
+        if delete_poll_seconds <= 0 or delete_wait_seconds < 0:
+            raise ValueError("Store deletion wait is not valid.")
         self.now = now or (lambda: datetime.now(timezone.utc))
+        self._sleep = asyncio.sleep if sleep is None else sleep
+        self._delete_poll_seconds = delete_poll_seconds
+        self._delete_wait_seconds = delete_wait_seconds
         self.refresh = refresh or self._refresh_registry
         self.auditor = Auditor(store)
         self.material_factory = new_secret_material
@@ -174,6 +184,8 @@ class StoreService:
             record.url = ""
             record.error_code = ""
             record.error_message = ""
+            record.attempt = 0
+            record.deadline_at = self.now() + timedelta(seconds=self.settings.stores.timeout_seconds)
             touch(record, self.now())
             try:
                 await update_store(self.store, record)
@@ -477,15 +489,25 @@ class StoreService:
         if self.cluster is not None:
             try:
                 await self.cluster.delete_namespace(record.namespace, record.store_id)
+                absent = await self._namespace_is_absent(record)
             except OwnershipError:
                 await self._fail(record, "ownership", cleanup=False)
                 return
             except Exception as exc:
                 logger.warning("Store namespace delete failed: %s", type(exc).__name__)
-                record.attempt += 1
-                record.progress = "Namespace deletion will be retried."
-                touch(record, self.now())
-                await update_store(self.store, record)
+                await self._note_delete_incomplete(record, failed=True)
+                return
+            if not absent:
+                await self._note_delete_incomplete(record, failed=False)
+                return
+            try:
+                released = await self._release_volumes(record)
+            except Exception as exc:
+                logger.warning("Store volume cleanup failed: %s", type(exc).__name__)
+                await self._note_delete_incomplete(record, failed=True)
+                return
+            if not released:
+                await self._note_delete_incomplete(record, failed=False)
                 return
         record.state = "deleted"
         record.phase = "deleted"
@@ -496,10 +518,66 @@ class StoreService:
         touch(record, self.now())
         await update_store(self.store, record)
 
+    async def _release_volumes(self, record: StoreRecord) -> bool:
+        """True when no leftover volume for this store still needs a retry."""
+        if self.cluster is None:
+            return True
+        release = getattr(self.cluster, "release_store_volumes", None)
+        if release is None:
+            return True
+        return bool(await release(record.namespace, record.store_id))
+
+    async def _namespace_is_absent(self, record: StoreRecord) -> bool:
+        """Poll until the namespace is gone or the wait budget is spent.
+
+        The sleep and clock are injectable so tests do not wait on a real timer.
+        The poll count is bounded so a clock that does not advance cannot spin.
+        """
+        if self.cluster is None:
+            return True
+        deadline = self.now() + timedelta(seconds=self._delete_wait_seconds)
+        steps = int(self._delete_wait_seconds / self._delete_poll_seconds) + 1
+        for _ in range(min(20, max(1, steps))):
+            if await self.cluster.namespace_absent(record.namespace, record.store_id):
+                return True
+            if self.now() >= deadline:
+                return False
+            await self._sleep(self._delete_poll_seconds)
+        return False
+
+    async def _note_delete_incomplete(self, record: StoreRecord, *, failed: bool) -> None:
+        """Keep the row deleting. An accepted or failed request is not completion.
+
+        attempt counts consecutive failed API calls and stops at max_attempts.
+        A namespace that is still terminating, or a volume that is still bound,
+        is normal progress. It is reported as blocked only after the deletion
+        deadline passes. Retries continue in every case.
+        """
+        limit = self.settings.stores.max_attempts
+        record.state = "deleting"
+        record.phase = "terminating"
+        record.url = ""
+        if failed:
+            record.attempt = min(record.attempt + 1, limit)
+            record.progress = "Namespace deletion failed and will be retried."
+        else:
+            record.attempt = 0
+            record.progress = "Waiting for the store namespace and volumes to be removed."
+        if record.attempt >= limit or self._expired(record):
+            record.error_code = "delete_blocked"
+            record.error_message = ERRORS["delete_blocked"]
+        else:
+            record.error_code = ""
+            record.error_message = ""
+        touch(record, self.now())
+        await update_store(self.store, record)
+
     async def _fail(self, record: StoreRecord, code: str, *, cleanup: bool) -> None:
         if cleanup and self.cluster is not None:
             try:
                 await self.cluster.delete_namespace(record.namespace, record.store_id)
+                if await self._namespace_is_absent(record):
+                    await self._release_volumes(record)
             except OwnershipError:
                 code = "ownership"
             except Exception as exc:

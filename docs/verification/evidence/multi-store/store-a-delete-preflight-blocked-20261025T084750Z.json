@@ -1,0 +1,44 @@
+{
+  "generatedAt": "20261025T084750Z",
+  "context": "kind-urumi-k8s-test",
+  "result": "STOPPED before deletion",
+  "blocker": "Step 2 needs an authorized store_174c75b6c0ef57e5__list_orders call with the existing Store B key bfca9a84d7b4380d. Its raw value existed only in gateway process memory during the 08:28Z test and was discarded. No file holds it (gateway /tmp contains only the admin session cookie file). The task forbids issuing another key, so the pre-delete call cannot be made safely.",
+  "preflight": {
+    "git": {
+      "branch": "submission",
+      "head": "b4b813c",
+      "statusEntries": 43
+    },
+    "helm": {
+      "revision": 7,
+      "status": "deployed",
+      "image": "urumi-gateway:pvc-labels-20261025T080649Z"
+    },
+    "stores": {
+      "c4421147ea825bbc": "Ready st-c4421147ea825bbc",
+      "174c75b6c0ef57e5": "Ready st-174c75b6c0ef57e5"
+    },
+    "podsUnready": [],
+    "restarts": 0,
+    "persistentVolumes": 7,
+    "keys": {
+      "03ab04ae83ba0191": [
+        "store_c4421147ea825bbc__list_orders"
+      ],
+      "40ab7159b6c06f90": [],
+      "bfca9a84d7b4380d": [
+        "store_174c75b6c0ef57e5__list_orders"
+      ]
+    },
+    "hostAvailableMiB": 2301,
+    "testNodeGiB": 3.205
+  },
+  "deleteSemanticsReviewed": {
+    "api": "POST /admin/stores/{store_id}/delete with an owner session; 202 while deleting, 200 if already Deleted; repeat is safe",
+    "immediate": "row set to deleting, then revoke_store_grants (SQL LIKE 'store\\_<id>\\_\\_%') and delete_upstream(store_<id>) before any cluster call",
+    "cluster": "provisioner _teardown: delete_namespace checks st-<16 hex> and the namespace store-id label; waits for namespace absence; release_store_volumes deletes only Released/Failed/Available PVs whose claimRef.namespace equals that namespace; Bound volumes keep the row deleting",
+    "admission": "provisioner writes limited to st-<16 hex> with matching labels; PV delete only when claimRef.namespace matches st-<16 hex>",
+    "reclaimPolicy": "standard StorageClass is Delete, so local-path removes the volumes after the claims are deleted"
+  },
+  "clusterMutations": false
+}

@@ -1,0 +1,265 @@
+{
+  "git": {
+    "branch": "submission",
+    "head": "b4b813c568ca70b45d28944a44de4e8e770f874d",
+    "statusEntries": 43
+  },
+  "helm": {
+    "revision": 7,
+    "status": "deployed"
+  },
+  "workloads": {
+    "Deployment/urumi-dashboard": {
+      "image": "urumi-dashboard:disposable-pkg-20261024",
+      "ready": 1,
+      "desired": 1
+    },
+    "Deployment/urumi-gateway": {
+      "image": "urumi-gateway:pvc-labels-20261025T080649Z",
+      "ready": 1,
+      "desired": 1
+    },
+    "Deployment/urumi-store-provisioner": {
+      "image": "urumi-gateway:pvc-labels-20261025T080649Z",
+      "ready": 1,
+      "desired": 1
+    },
+    "Deployment/urumi-support-mcp": {
+      "image": "urumi-support-mcp:disposable-pkg-20261024",
+      "ready": 1,
+      "desired": 1
+    },
+    "Deployment/urumi-utility-mcp": {
+      "image": "urumi-utility-mcp:disposable-pkg-20261024",
+      "ready": 1,
+      "desired": 1
+    },
+    "Deployment/urumi-woocommerce-mcp": {
+      "image": "urumi-woocommerce-mcp:disposable-pkg-20261024",
+      "ready": 1,
+      "desired": 1
+    },
+    "Deployment/urumi-wordpress": {
+      "image": "urumi-wordpress-woo:disposable-readiness-20261024",
+      "ready": 1,
+      "desired": 1
+    },
+    "StatefulSet/urumi-gateway-db": {
+      "image": "postgres:16-alpine",
+      "ready": 1,
+      "desired": 1
+    },
+    "StatefulSet/urumi-store-db": {
+      "image": "mariadb:11.4",
+      "ready": 1,
+      "desired": 1
+    }
+  },
+  "pods": {
+    "urumi-dashboard-dd8969595-zcs7b": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-gateway-7d5dd886cc-jn59v": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-gateway-db-0": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-store-db-0": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-store-provisioner-5cd656df79-8f677": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-support-mcp-656b8f8b89-dwmnj": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-utility-mcp-86796cd486-dh2f4": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-woocommerce-mcp-647ddfb9b4-jctbl": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-wordpress-f76c57df5-j7l62": {
+      "phase": "Running",
+      "ready": true,
+      "restarts": 0
+    },
+    "urumi-wordpress-init-znvkv": {
+      "phase": "Succeeded",
+      "ready": false,
+      "restarts": 0
+    }
+  },
+  "provisionerEnv": {
+    "STORE_PROVISION_CONCURRENCY": "1",
+    "STORE_MAX_PER_USER": "3",
+    "STORE_PROVISION_TIMEOUT_SECONDS": "600",
+    "STORE_PROVISION_MAX_ATTEMPTS": "5",
+    "STORE_ALLOW_PLUGIN_EGRESS": "false",
+    "STORE_STORAGE_CLASS": "standard",
+    "STORE_PROBE_CIDRS": "172.19.0.2/32",
+    "STORE_IMAGE_WORDPRESS": "urumi-wordpress-woo:disposable-readiness-20261024",
+    "STORE_IMAGE_MARIADB": "mariadb:11.4",
+    "STORE_IMAGE_WORDPRESS_CLI": "wordpress:cli-php8.2",
+    "STORE_IMAGE_WOO_MCP": "urumi-woocommerce-mcp:disposable-pkg-20261024"
+  },
+  "namespaces": [
+    "calico-system",
+    "default",
+    "kube-node-lease",
+    "kube-public",
+    "kube-system",
+    "local-path-storage",
+    "st-c4421147ea825bbc",
+    "tigera-operator"
+  ],
+  "storeAInventory": [
+    "ConfigMap/kube-root-ca.crt",
+    "ConfigMap/store-config",
+    "ConfigMap/store-init",
+    "Deployment/woo-mcp",
+    "Deployment/wordpress",
+    "Ingress/store",
+    "Job/wordpress-init",
+    "LimitRange/store",
+    "NetworkPolicy/default-deny",
+    "NetworkPolicy/store-db",
+    "NetworkPolicy/woo-mcp",
+    "NetworkPolicy/wordpress",
+    "NetworkPolicy/wordpress-init",
+    "PersistentVolumeClaim/data-store-db-0",
+    "PersistentVolumeClaim/wordpress-data",
+    "ResourceQuota/store",
+    "Secret/store-db",
+    "Secret/woocommerce-credentials",
+    "Service/store-db",
+    "Service/woo-mcp",
+    "Service/wordpress",
+    "StatefulSet/store-db"
+  ],
+  "pvs": {
+    "pvc-00ba996f-ea68-4f44-ab5d-26184b9201c7": {
+      "phase": "Bound",
+      "claim": "st-c4421147ea825bbc/wordpress-data"
+    },
+    "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a": {
+      "phase": "Bound",
+      "claim": "default/urumi-wordpress-data"
+    },
+    "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971": {
+      "phase": "Bound",
+      "claim": "default/data-urumi-gateway-db-0"
+    },
+    "pvc-8ca68528-e380-4896-a925-335cafddda34": {
+      "phase": "Bound",
+      "claim": "default/data-urumi-store-db-0"
+    },
+    "pvc-cfec2069-30de-43ee-b62f-7f02c16a7aa3": {
+      "phase": "Bound",
+      "claim": "st-c4421147ea825bbc/data-store-db-0"
+    }
+  },
+  "netpolDefault": [
+    "urumi-dashboard-net",
+    "urumi-gateway-db-net",
+    "urumi-gateway-net",
+    "urumi-store-db-net",
+    "urumi-store-provisioner-net",
+    "urumi-upstream-net",
+    "urumi-woocommerce-mcp-net",
+    "urumi-wordpress-init-net",
+    "urumi-wordpress-net"
+  ],
+  "storeAQuotaUsed": {
+    "limits.cpu": "1250m",
+    "limits.memory": "1280Mi",
+    "persistentvolumeclaims": "2",
+    "pods": "3",
+    "requests.cpu": "225m",
+    "requests.memory": "576Mi",
+    "services": "3"
+  },
+  "storeALimitRange": [
+    {
+      "default": {
+        "cpu": "250m",
+        "memory": "256Mi"
+      },
+      "defaultRequest": {
+        "cpu": "25m",
+        "memory": "64Mi"
+      },
+      "max": {
+        "cpu": "1",
+        "memory": "768Mi"
+      },
+      "type": "Container"
+    }
+  ],
+  "admissionPolicies": [
+    [
+      "protect-builtin-tiers.projectcalico.org",
+      "Fail"
+    ],
+    [
+      "urumi-store-provisioner-scope",
+      "Fail"
+    ]
+  ],
+  "admissionBindings": [
+    [
+      "protect-builtin-tiers.projectcalico.org",
+      [
+        "Deny"
+      ]
+    ],
+    [
+      "urumi-store-provisioner-scope",
+      [
+        "Deny"
+      ]
+    ]
+  ],
+  "hostAvailableMiB": 2516,
+  "testNodeDocker": "2.944GiB / 7.58GiB",
+  "db": {
+    "users": [
+      [
+        "169d3b25942f065b",
+        "acceptance-admin",
+        "admin"
+      ]
+    ],
+    "stores": [
+      [
+        "c4421147ea825bbc",
+        "acceptance-store-a",
+        "ready",
+        "ready",
+        "st-c4421147ea825bbc",
+        0,
+        "169d3b25942f065b"
+      ]
+    ],
+    "activeOperations": []
+  },
+  "generatedAt": "20261025T081741Z",
+  "mode": "read-only preflight before Store B"
+}

@@ -1,0 +1,89 @@
+# Proposed disposable overlay. Not installed.
+# Do not pass this file to kind-urumi-k8s-dev, kind-urumi-k8s-test, or the
+# existing urumi Helm release.
+#
+# helm/urumi/values-disposable.yaml is unchanged and must not be installed.
+# Its gateway tag is still urumi-gateway:local from 2026-10-10, and its
+# WordPress tag urumi-wordpress-woo:disposable was never built.
+#
+# This file is not an install command while the probe lists below are empty.
+# storeProvisioner.requireCapturedProbeCidrs is true, so helm template fails
+# closed until a later, approved values file supplies the captured host
+# routes. Do not put a guessed address here. Do not copy 172.19.0.2/32 or
+# 172.19.0.3/32 from the protected clusters.
+
+store:
+  enabled: false
+
+ingress:
+  enabled: true
+  className: nginx
+  store:
+    enabled: false
+  gateway:
+    enabled: true
+    host: gateway.stores.local
+  dashboard:
+    enabled: true
+    host: dashboard.stores.local
+
+networkPolicy:
+  enabled: true
+  allowExternalEgress: false
+  ingressNamespace: ingress-nginx
+  # Chart policies for the gateway, dashboard, and in-namespace MCP servers.
+  # Empty until the disposable node's kubelet probe source is captured.
+  probeCIDRs: []
+
+gateway:
+  image:
+    repository: urumi-gateway
+    # Includes the init-script fix. The earlier disposable-pkg tag does not.
+    tag: disposable-manual-20261024
+
+dashboard:
+  image:
+    repository: urumi-dashboard
+    # Built as urumi-dashboard:disposable-pkg-20261024. Do not retag :local.
+    tag: disposable-pkg-20261024
+
+upstreams:
+  support:
+    image:
+      repository: urumi-support-mcp
+      tag: disposable-pkg-20261024
+  utility:
+    image:
+      repository: urumi-utility-mcp
+      tag: disposable-pkg-20261024
+  woocommerce:
+    image:
+      repository: urumi-woocommerce-mcp
+      tag: disposable-pkg-20261024
+
+database:
+  persistence:
+    # Names the class. It does not install a provisioner and does not set
+    # reclaimPolicy. Read that field back on the disposable cluster before
+    # creating a store.
+    storageClass: local-path
+
+storeProvisioner:
+  enabled: true
+  admit: true
+  requireCapturedProbeCidrs: true
+  allowPluginEgress: false
+  storageClass: local-path
+  ingressClass: nginx
+  ingressBaseDomain: stores.local
+  ingressNamespace: ingress-nginx
+  # Store WordPress httpGet :80 / and store MCP httpGet :8000 /health.
+  # MariaDB probes are in-container exec and are not added to the database
+  # policy. Leave this empty until the capture. The process also drops any
+  # prefix shorter than IPv4 /24 or IPv6 /120, including 0.0.0.0/0.
+  probeCidrs: ""
+  images:
+    wordpress: urumi-wordpress-woo:disposable-readiness-20261024
+    mariadb: mariadb:11.4
+    wordpressCli: wordpress:cli-php8.2
+    woocommerceMcp: urumi-woocommerce-mcp:disposable-pkg-20261024

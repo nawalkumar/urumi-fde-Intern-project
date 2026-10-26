@@ -23,6 +23,8 @@ from apps.gateway.app.permissions import is_permission_name
 from apps.gateway.app.secretsbox import CredentialKeyMissing, CredentialUnreadable, credential_key_configured, seal_secret
 from apps.gateway.app.ssrf import UnsafeUpstreamUrl, validate_upstream_url
 from apps.gateway.app.stores.model import reserved_store_upstream
+from apps.gateway.app.stores.repository import get_store
+from apps.gateway.app.stores.routing import store_id_from_tool
 
 _USERNAME = re.compile(r"[a-z][a-z0-9_-]{2,31}")
 _UPSTREAM_ID = re.compile(r"[a-z][a-z0-9_-]{0,62}")
@@ -211,8 +213,20 @@ def register_admin_routes(app: FastAPI, store: object, registry: object, setting
         body = await _body(request)
         if body is None or not is_permission_name(body.get("tool_name")):
             return _bad()
+        tool_name = body["tool_name"]
+        store_id = store_id_from_tool(tool_name)
+        if store_id is not None:
+            if store_id == "":
+                return _bad()
+            try:
+                row = await store.get(key_id)  # type: ignore[attr-defined]
+                record = await get_store(store, store_id)
+            except StoreUnavailable:
+                return _unavailable()
+            if row is None or not row.user_id or record is None or record.owner_user_id != row.user_id:
+                return _bad()
         try:
-            changed = await store.grant(key_id, body["tool_name"])  # type: ignore[attr-defined]
+            changed = await store.grant(key_id, tool_name)  # type: ignore[attr-defined]
         except StoreUnavailable:
             return _unavailable()
         if not changed:

@@ -1,0 +1,56 @@
+{
+  "generatedAt": "20261025T051007Z",
+  "context": "kind-urumi-k8s-test",
+  "release": "urumi",
+  "namespace": "default",
+  "revision": 2,
+  "provisionerEnabled": false,
+  "admit": false,
+  "allowExternalEgress": false,
+  "storesCreated": false,
+  "codeModified": false,
+  "tests": {
+    "command": "pytest tests/test_stores.py tests/test_store_kube.py tests/test_store_manifests.py tests/test_store_routing.py tests/test_networkpolicy_intent.py -q --tb=line",
+    "passed": 51,
+    "failed": 0,
+    "clusterUsed": false
+  },
+  "host": {
+    "memTotalMiB": 7762,
+    "memAvailableMiB": 2606,
+    "testNodeCgroupMiB": 3471,
+    "devNodeDockerGiB": 1.76,
+    "diskAvailableGiB": 890
+  },
+  "baseline": {
+    "requestsMiB": 1152,
+    "limitsMiB": 3712,
+    "observedRssMiB": {
+      "apache2": 247,
+      "mariadbd": 130,
+      "postgres": 79,
+      "uvicorn": 293
+    },
+    "resourceQuotaPresent": false,
+    "limitRangePresent": false
+  },
+  "oneStoreManifest": {
+    "steadyRequestsMiB": 576,
+    "steadyLimitsMiB": 1280,
+    "withInitJobLimitsMiB": 1792,
+    "quotaRequests": "2Gi",
+    "quotaLimits": "4Gi",
+    "pvcs": 2,
+    "observedPeerRssMiB": {
+      "wordpress": 247,
+      "mariadb": 130,
+      "mcp": 73
+    }
+  },
+  "decision": {
+    "oneStoreSafeIfMemoryHolds": true,
+    "twoStoresConcurrent": false,
+    "stopIfAvailableBelowMiB": 1200,
+    "probeGapBlocksReady": true
+  }
+}

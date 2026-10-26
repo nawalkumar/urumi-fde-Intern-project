@@ -1,0 +1,145 @@
+{
+  "generatedAt": "2026-10-25T13:47:37Z",
+  "auditSnapshotAt": "2026-10-25T13:45:42Z",
+  "context": "kind-urumi-k8s-test",
+  "scope": "Least-privilege negative tests for temporary key d81bf7a2acd3750f through the test gateway. Two ungranted tool calls, both expected to be denied before any upstream execution.",
+  "protectedContext": "kind-urumi-k8s-dev was not used. Every kubectl command passed --context kind-urumi-k8s-test explicitly.",
+  "gateway": {
+    "endpoint": "http://127.0.0.1:18082/mcp",
+    "transport": "kubectl --context kind-urumi-k8s-test -n default port-forward --address 127.0.0.1 svc/urumi-gateway 18082:8000",
+    "pod": "default/urumi-gateway-57c67d754c-6bt82 (pod IP 192.168.184.166)",
+    "mcpSdk": "mcp 2.3.0 in both the gateway image and the local .venv"
+  },
+  "key": {
+    "key_id": "d81bf7a2acd3750f",
+    "user_id": "169d3b25942f065b",
+    "liveAtSnapshot": true,
+    "grantsAtSnapshot": [
+      "store_174c75b6c0ef57e5__list_orders",
+      "store_5bc7dc01da3ccf38__list_orders"
+    ],
+    "rawKeyRecorded": false
+  },
+  "client": {
+    "helper": "tests/mcp_session.py open_mcp (official MCP SDK Client over streamable HTTP)",
+    "runner": "/tmp/urumi_negative_test.py, outside the repository. It reads the key from the owner's shell environment, prints no key, and redacts it from result text. No application code was changed.",
+    "runBy": "owner, in terminal shell pid 374685, with the project .venv",
+    "sessionOpenedUtc": "2026-10-25T13:39:22.484597Z",
+    "sessionClosedUtc": "2026-10-25T13:39:23.632367Z",
+    "toolsList": [
+      "store_174c75b6c0ef57e5__list_orders",
+      "store_5bc7dc01da3ccf38__list_orders"
+    ],
+    "precedingCursorAttempt": "Before this run, a Cursor CallDynamicTool attempt for store_174c75b6c0ef57e5__get_order was refused by the Cursor client ('tool not found') because the tool is not in the key's tools/list. It never reached the gateway (audit max id stayed 51) and is not counted as a denial."
+  },
+  "tests": [
+    {
+      "test": "A",
+      "purpose": "Deny an ungranted tool on a store the key can otherwise read",
+      "tool": "store_174c75b6c0ef57e5__get_order",
+      "arguments": {"order_id": 10},
+      "expected": "Permission denied, audit outcome unauthorized, no upstream execution",
+      "client": {
+        "startedUtc": "2026-10-25T13:39:22.998232Z",
+        "endedUtc": "2026-10-25T13:39:23.335183Z",
+        "is_error": true,
+        "text": "Permission denied."
+      },
+      "auditRow": {
+        "id": 52,
+        "occurred_at": "2026-10-25T13:39:23.321474Z",
+        "actor": "d81bf7a2acd3750f",
+        "user_id": "169d3b25942f065b",
+        "tool_name": "store_174c75b6c0ef57e5__get_order",
+        "outcome": "unauthorized",
+        "upstream_id": "",
+        "duration_ms": null,
+        "target": ""
+      },
+      "gatewayAccessLog": "2026-10-25T13:39:23.329572Z 127.0.0.1:35586 POST /mcp 200 (JSON-RPC error results travel inside a 200 response)",
+      "actual": "Denied. PASS."
+    },
+    {
+      "test": "B",
+      "purpose": "Deny an unrelated static utility tool",
+      "tool": "utility__convert_units",
+      "toolValidity": "Valid public name: apps/utility_mcp/app/main.py registers convert_units, and the gateway registers that upstream under id utility (apps/gateway/app/config.py; live ConfigMap urumi-config has UTILITY_MCP_URL).",
+      "arguments": {"value": 1, "from_unit": "km", "to_unit": "m"},
+      "expected": "Permission denied, audit outcome unauthorized, no upstream execution",
+      "client": {
+        "startedUtc": "2026-10-25T13:39:23.335313Z",
+        "endedUtc": "2026-10-25T13:39:23.627919Z",
+        "is_error": true,
+        "text": "Permission denied."
+      },
+      "auditRow": {
+        "id": 53,
+        "occurred_at": "2026-10-25T13:39:23.609159Z",
+        "actor": "d81bf7a2acd3750f",
+        "user_id": "169d3b25942f065b",
+        "tool_name": "utility__convert_units",
+        "outcome": "unauthorized",
+        "upstream_id": "",
+        "duration_ms": null,
+        "target": ""
+      },
+      "gatewayAccessLog": "2026-10-25T13:39:23.621865Z 127.0.0.1:35586 POST /mcp 200",
+      "actual": "Denied. PASS."
+    }
+  ],
+  "auditMatching": {
+    "method": "Read-only psql (default_transaction_read_only=on) on gateway_audit_log rows with id > 49, named columns only.",
+    "result": "Exactly two new rows after 51 at snapshot time: 52 and 53. Each has the key's actor, the exact tool name, outcome unauthorized, and an occurred_at inside its client call window.",
+    "outcomeSchema": "OUTCOMES in apps/gateway/app/audit.py: success, error, timeout, upstream_failure, unauthorized. unauthorized is the authorization-denial outcome.",
+    "denialBranch": "dispatch.py: authorize() passed (an inactive key returns 'Authentication required', not 'Permission denied.'). 'Permission denied.' with an empty upstream_id comes from the is_tool_permission or grant check (permits() false). The store-ownership denial sets upstream_id, so it is excluded. All three checks run before registry.call."
+  },
+  "noUpstreamExecution": {
+    "auditFields": "upstream_id and duration_ms are written only after registry.call returns or fails. Both are empty or null on rows 52 and 53.",
+    "upstreamTrafficObserved": "During the session the gateway (192.168.184.166) sent two POST /mcp requests to Store B woo-mcp and two to utility-mcp in each of three windows: 13:39:22.86-22.92 (client tools/list), 13:39:23.20-23.24 (during call A), 13:39:23.44-23.52 (during call B).",
+    "whyUpstreamsWereContacted": "MCP SDK 2.3.0 server code (mcp/server/_streamable_http_modern.py _mcp_param_rejection and _tool_input_schema): for each tools/call with arguments, when the server sets no get_tool_input_schema, the SDK runs the server's own tools/list handler before dispatch to validate Mcp-Param headers. The gateway does not set get_tool_input_schema, so its on_list_tools runs discover(), and registry.list_tools_result() refreshes every enabled upstream with initialize plus tools/list. That pair is two POSTs per upstream.",
+    "storeBComparison": {
+      "realExecutionAt13_20Z": "Store B woo-mcp logged three POSTs (13:20:35.344, 35.363, 39.120) and one outbound 'HTTP Request: GET http://wordpress/wp-json/wc/v3/orders' at 13:20:39.110. Store B wordpress logged the matching GET /wp-json/wc/v3/orders.",
+      "deniedCallAt13_39Z": "Store B woo-mcp logged only POST pairs and no outbound HTTP Request line between 13:38:30Z and 13:40:30Z. Store B wordpress logged no non-health requests in that window. get_order (GET /wp-json/wc/v3/orders/10) did not run."
+    },
+    "utilityLimitation": "convert_units is a pure function with no downstream request, and upstream access logs do not record the JSON-RPC method. For test B, 'no execution' rests on the audit fields, the dispatch code path, and the two-POST pattern, which matches a tools/list refresh rather than a call (registry.call needs initialize, tools/list, and tools/call). It is not proven by an independent upstream side effect.",
+    "sideEffectNote": "The listing refresh updated only the gateway's in-memory tool snapshot. It did not change grants, keys, stores, or persisted configuration."
+  },
+  "otherGatewayTraffic": [
+    "2026-10-25T13:39:22.672Z and 13:39:22.992Z POST /mcp 200 on 127.0.0.1:35586: the runner's initialize and tools/list.",
+    "2026-10-25T13:39:39.909Z and 13:45:07.403Z POST /mcp 200 on other connections: no audit row, so not tool calls (Cursor's background session).",
+    "2026-10-25T13:40:17.682Z GET /admin/audit 200 from 192.168.184.142: a dashboard read of the audit page, not by the agent."
+  ],
+  "positiveControls": {
+    "evidence": "cursor-mcp-client-verification-20261025T133049Z.json",
+    "rows": [
+      {"id": 50, "occurred_at": "2026-10-25T13:20:39.085791Z", "tool_name": "store_5bc7dc01da3ccf38__list_orders", "outcome": "success", "upstream_id": "store_5bc7dc01da3ccf38", "duration_ms": 2744},
+      {"id": 51, "occurred_at": "2026-10-25T13:20:39.127304Z", "tool_name": "store_174c75b6c0ef57e5__list_orders", "outcome": "success", "upstream_id": "store_174c75b6c0ef57e5", "duration_ms": 3834}
+    ],
+    "auditCountForKeyAtSnapshot": "4 rows: 50 and 51 success, 52 and 53 unauthorized"
+  },
+  "directStoreCalls": "None. Both attempts went only to the gateway endpoint. Store pods were read only through kubectl logs and earlier read-only queries; no store MCP or WooCommerce endpoint was called directly.",
+  "limitations": [
+    "Test B's 'no upstream execution' is shown by audit fields, code path, and request count, not by an independent upstream side effect.",
+    "Upstream and gateway access logs carry no JSON-RPC method or client identity. All client traffic arrives from 127.0.0.1 through the port-forward.",
+    "Denied tools/call still causes an upstream tools/list refresh across all enabled upstreams, because of the SDK's Mcp-Param validation path. This is not tool execution, but it is upstream contact triggered by an unauthorized call. Setting get_tool_input_schema on the gateway server would avoid it; no change was made.",
+    "Cross-owner denial (a key from another user calling a store tool) was not tested here."
+  ],
+  "mutations": {
+    "cluster": "None. Kubernetes access was get, logs, and exec with read-only psql. No store, Secret, Helm release, or configuration was changed.",
+    "keysAndGrants": "No key created, revoked, or rotated. No grant changed.",
+    "auditRowsCreated": "Rows 52 and 53, written by the gateway as the expected result of the two test calls.",
+    "git": "Nothing staged, committed, pushed, reset, cleaned, stashed, or discarded.",
+    "files": "This evidence file only. The earlier evidence file was not modified."
+  },
+  "secretScan": {
+    "method": "Pattern scan of this file only. No credential file or environment value was read.",
+    "jsonParses": true,
+    "gatewayKeyShape": false,
+    "sessionTokenShape": false,
+    "wooCommerceKeyShape": false,
+    "bearerOrAuthorizationValue": false,
+    "envAssignments": false,
+    "longStrings": "Only paths, file names, the pod name, and tool names."
+  },
+  "secretsPrinted": false
+}

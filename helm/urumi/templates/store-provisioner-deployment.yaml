@@ -59,6 +59,12 @@ spec:
               value: {{ .Release.Namespace | quote }}
             - name: STORE_INGRESS_NAMESPACE
               value: {{ .Values.storeProvisioner.ingressNamespace | quote }}
+            - name: STORE_INGRESS_CLASS
+              value: {{ .Values.storeProvisioner.ingressClass | quote }}
+            - name: STORE_STORAGE_CLASS
+              value: {{ .Values.storeProvisioner.storageClass | quote }}
+            - name: STORE_PROBE_CIDRS
+              value: {{ .Values.storeProvisioner.probeCidrs | quote }}
             - name: STORE_ALLOW_PLUGIN_EGRESS
               value: {{ .Values.storeProvisioner.allowPluginEgress | quote }}
             - name: STORE_IMAGE_WORDPRESS

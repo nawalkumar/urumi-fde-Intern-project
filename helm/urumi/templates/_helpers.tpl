@@ -283,4 +283,70 @@ failureThreshold: {{ $probe.failureThreshold }}
 {{- if and .Values.storeProvisioner.enabled (not .Values.storeProvisioner.admit) }}
 {{- fail "The store provisioner is non-deployable until storeProvisioner.admit is true and the admission policy is installed. Do not enable it on the live release." }}
 {{- end }}
+{{- if and .Values.storeProvisioner.admit (not .Values.storeProvisioner.enabled) }}
+{{- fail "storeProvisioner.admit cannot be true while storeProvisioner.enabled is false." }}
+{{- end }}
+{{- if .Values.storeProvisioner.requireCapturedProbeCidrs }}
+{{- if not .Values.networkPolicy.enabled }}
+{{- fail "storeProvisioner.requireCapturedProbeCidrs requires networkPolicy.enabled. Do not disable NetworkPolicy to avoid setting a probe CIDR." }}
+{{- end }}
+{{- if not .Values.storeProvisioner.probeCidrs }}
+{{- fail "storeProvisioner.probeCidrs is empty. Capture the kubelet probe source on the disposable node and set one IPv4 /32 or IPv6 /128. Do not guess a CIDR and do not use a default route." }}
+{{- end }}
+{{- range splitList "," .Values.storeProvisioner.probeCidrs }}
+{{- $item := trim . }}
+{{- if not $item }}
+{{- fail "storeProvisioner.probeCidrs contains an empty entry." }}
+{{- end }}
+{{- if or (eq $item "0.0.0.0/0") (eq $item "::/0") }}
+{{- fail "storeProvisioner.probeCidrs rejects a default route." }}
+{{- end }}
+{{- if and (not (hasSuffix "/32" $item)) (not (hasSuffix "/128" $item)) }}
+{{- fail "storeProvisioner.probeCidrs must be a captured single-host /32 or /128. A wider prefix is rejected." }}
+{{- end }}
+{{- end }}
+{{- if not .Values.networkPolicy.probeCIDRs }}
+{{- fail "networkPolicy.probeCIDRs is empty. Use the same captured kubelet source as storeProvisioner.probeCidrs. Do not guess a CIDR and do not use a default route." }}
+{{- end }}
+{{- range .Values.networkPolicy.probeCIDRs }}
+{{- if or (eq . "0.0.0.0/0") (eq . "::/0") }}
+{{- fail "networkPolicy.probeCIDRs rejects a default route." }}
+{{- end }}
+{{- if and (not (hasSuffix "/32" .)) (not (hasSuffix "/128" .)) }}
+{{- fail "networkPolicy.probeCIDRs must be a captured single-host /32 or /128. A wider prefix is rejected." }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range .Values.networkPolicy.gatewayEgressCIDRs }}
+{{- if not (regexMatch "^([0-9]{1,3}\\.){3}[0-9]{1,3}/32$" (toString .)) }}
+{{- fail "networkPolicy.gatewayEgressCIDRs accepts only public IPv4 /32 entries." }}
+{{- end }}
+{{- $octets := splitList "." (trimSuffix "/32" .) }}
+{{- $a := atoi (index $octets 0) }}
+{{- $b := atoi (index $octets 1) }}
+{{- range $octets }}
+{{- if gt (atoi .) 255 }}
+{{- fail "networkPolicy.gatewayEgressCIDRs contains an invalid IPv4 address." }}
+{{- end }}
+{{- end }}
+{{- if or (eq $a 0) (eq $a 10) (eq $a 127) (ge $a 224) (and (eq $a 169) (eq $b 254)) (and (eq $a 172) (ge $b 16) (le $b 31)) (and (eq $a 192) (eq $b 168)) (and (eq $a 100) (ge $b 64) (le $b 127)) }}
+{{- fail "networkPolicy.gatewayEgressCIDRs rejects private, loopback, link-local, CGNAT, and multicast addresses." }}
+{{- end }}
+{{- end }}
+{{- range .Values.storeProvisioner.apiServerEgress }}
+{{- if not (kindIs "map" .) }}
+{{- fail "storeProvisioner.apiServerEgress entries need cidr and port." }}
+{{- end }}
+{{- $cidr := toString (default "" .cidr) }}
+{{- if not (or (regexMatch "^([0-9]{1,3}\\.){3}[0-9]{1,3}/32$" $cidr) (regexMatch "^[0-9a-fA-F:]+/128$" $cidr)) }}
+{{- fail "storeProvisioner.apiServerEgress cidr must be one host, /32 or /128." }}
+{{- end }}
+{{- if or (hasPrefix "0.0.0.0" $cidr) (eq $cidr "::/128") }}
+{{- fail "storeProvisioner.apiServerEgress rejects an unspecified address." }}
+{{- end }}
+{{- $port := int (default 0 .port) }}
+{{- if or (lt $port 1) (gt $port 65535) }}
+{{- fail "storeProvisioner.apiServerEgress port must be between 1 and 65535." }}
+{{- end }}
+{{- end }}
 {{- end }}

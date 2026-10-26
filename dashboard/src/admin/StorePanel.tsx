@@ -18,6 +18,14 @@ export type StoreRow = {
 
 const ACTIVE = new Set<StoreState>(["Provisioning", "Deleting"]);
 
+const STATE_CLASS: Record<StoreState, string> = {
+  Provisioning: "state state-pending",
+  Ready: "state state-ok",
+  Failed: "state state-failed",
+  Deleting: "state state-pending",
+  Deleted: "state state-disabled",
+};
+
 export function StorePanel() {
   const [stores, setStores] = useState<StoreRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,54 +130,70 @@ export function StorePanel() {
   }
 
   return (
-    <section className="store-panel" aria-label="Stores">
-      <h3>Stores</h3>
+    <section id="stores" className="store-panel panel" aria-label="Stores">
+      <div className="section-head">
+        <h3>Stores</h3>
+        <button type="button" className="btn-secondary btn-sm" onClick={() => void load()}>
+          Refresh stores
+        </button>
+      </div>
       {loading ? <p>Loading stores…</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
-      {stores && stores.length === 0 ? <p>No stores yet.</p> : null}
+      {stores && stores.length === 0 ? <p className="empty">No stores yet.</p> : null}
       {stores && stores.length > 0 ? (
-        <table className="admin-table">
-          <caption className="sr-only">Provisioned stores</caption>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Id</th>
-              <th>Status</th>
-              <th>URL</th>
-              <th>Created</th>
-              <th>Details</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stores.map((store) => (
-              <tr key={store.store_id}>
-                <td>{store.name}</td>
-                <td>{store.store_id}</td>
-                <td>{store.state}</td>
-                <td>{store.url ? <a href={store.url}>{store.url}</a> : "Not ready"}</td>
-                <td>{store.created_at}</td>
-                <td>
-                  <span>{store.progress}</span>
-                  {store.error_description ? <span>{store.error_description}</span> : null}
-                </td>
-                <td>
-                  {store.state === "Failed" ? (
-                    <button type="button" onClick={() => void retry(store)} disabled={pending}>
-                      Retry {store.name}
-                    </button>
-                  ) : null}
-                  <button type="button" onClick={() => setConfirm(store)} disabled={pending || store.state === "Deleting"}>
-                    Delete {store.name}
-                  </button>
-                </td>
+        <div className="table-wrap" role="region" aria-label="Stores table" tabIndex={0}>
+          <table className="admin-table">
+            <caption className="sr-only">Provisioned stores</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Id</th>
+                <th scope="col">Status</th>
+                <th scope="col">URL</th>
+                <th scope="col">Created</th>
+                <th scope="col">Details</th>
+                <th scope="col">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {stores.map((store) => (
+                <tr key={store.store_id}>
+                  <td>{store.name}</td>
+                  <td className="mono">{store.store_id}</td>
+                  <td>
+                    <span className={STATE_CLASS[store.state] ?? "state state-unknown"}>{store.state}</span>
+                  </td>
+                  <td className="mono cell-wrap">{store.url ? <a href={store.url}>{store.url}</a> : "Not ready"}</td>
+                  <td className="nowrap">{store.created_at}</td>
+                  <td className="cell-wrap store-details">
+                    <span>{store.progress}</span>
+                    {store.error_description ? <span className="store-error">{store.error_description}</span> : null}
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      {store.state === "Failed" ? (
+                        <button type="button" className="btn-secondary btn-sm" onClick={() => void retry(store)} disabled={pending}>
+                          Retry {store.name}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="btn-danger btn-sm"
+                        onClick={() => setConfirm(store)}
+                        disabled={pending || store.state === "Deleting"}
+                      >
+                        Delete {store.name}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
-      <form aria-label="Create store" onSubmit={(event) => void create(event)}>
+      <form className="inset-form" aria-label="Create store" onSubmit={(event) => void create(event)}>
         <label>
           Store name
           <input
@@ -195,20 +219,19 @@ export function StorePanel() {
           Create store
         </button>
       </form>
-      <button type="button" onClick={() => void load()}>
-        Refresh stores
-      </button>
       {confirm ? (
-        <div role="dialog" aria-label={`Delete ${confirm.name}`}>
+        <div role="dialog" aria-label={`Delete ${confirm.name}`} className="confirm-dialog">
           <p>
             Delete {confirm.name} ({confirm.store_id})? This removes that store only.
           </p>
-          <button type="button" onClick={() => setConfirm(null)} disabled={pending}>
-            Cancel deletion
-          </button>
-          <button type="button" onClick={() => void remove(confirm)} disabled={pending}>
-            Confirm delete {confirm.name}
-          </button>
+          <div className="row-actions">
+            <button type="button" className="btn-secondary" onClick={() => setConfirm(null)} disabled={pending}>
+              Cancel deletion
+            </button>
+            <button type="button" className="btn-danger-solid" onClick={() => void remove(confirm)} disabled={pending}>
+              Confirm delete {confirm.name}
+            </button>
+          </div>
         </div>
       ) : null}
     </section>

@@ -236,7 +236,7 @@ async def test_store_tool_stays_hidden_until_ready_and_pinned() -> None:
     )
     record, kind = await service.create(user.user_id, "North Shop", "idem-north-1")
     assert kind == "created" and record is not None
-    issued = await memory.issue()
+    issued = await memory.issue_for_user(user.user_id)
     tool_name = public_tool(record.store_id, "list_orders")
     assert await memory.grant(issued.key_id, tool_name) is True
     authenticator = Authenticator(memory)
@@ -264,3 +264,94 @@ async def test_store_tool_stays_hidden_until_ready_and_pinned() -> None:
     await memory.save_upstream(saved[0].upstream_id, mcp_url(namespace_for(record.store_id)), True, saved[0].credential)
     await service.request_delete(user.user_id, record.store_id)
     assert await visible() == []
+
+
+@pytest.mark.asyncio
+async def test_two_store_names_stay_distinct_and_a_revoked_grant_is_not_called() -> None:
+    from apps.gateway.app.audit import Auditor
+    from apps.gateway.app.auth import Authenticator
+    from apps.gateway.app.discovery import collect_authorized
+    from apps.gateway.app.dispatch import ToolDispatcher
+
+    memory = InMemoryStore()
+    user = await memory.create_user("ada", hash_password("password-value-ok"), "admin")
+    cluster = FakeCluster()
+    service = StoreService(
+        memory,
+        Registry([]),
+        Settings(upstreams=[], stores=StoreProvisionerSettings(enabled=True, max_per_user=2)),
+        cluster,
+        autostart=False,
+    )
+    left, left_kind = await service.create(user.user_id, "North Shop", "idem-north-1")
+    right, right_kind = await service.create(user.user_id, "South Shop", "idem-south-1")
+    assert left_kind == right_kind == "created"
+    assert left is not None and right is not None
+    cluster.ready = True
+    await service.reconcile_store(left.store_id)
+    await service.reconcile_store(right.store_id)
+    left_tool = public_tool(left.store_id, "list_orders")
+    right_tool = public_tool(right.store_id, "list_orders")
+    assert left_tool != right_tool
+    assert left_tool.endswith("__list_orders") and right_tool.endswith("__list_orders")
+    issued = await memory.issue_for_user(user.user_id)
+    assert await memory.grant(issued.key_id, left_tool) is True
+    assert await memory.grant(issued.key_id, right_tool) is True
+    authenticator = Authenticator(memory)
+    principal = await authenticator.authenticate(issued.raw_key)
+    listing = _Listing(
+        [
+            Tool(name=left_tool, description="orders", input_schema={"type": "object"}),
+            Tool(name=right_tool, description="orders", input_schema={"type": "object"}),
+        ]
+    )
+    dispatcher = ToolDispatcher(listing, authenticator, Auditor(memory), memory)
+
+    async def visible() -> list[str]:
+        tools, _excluded, error = await collect_authorized(listing, authenticator, memory, principal)
+        assert error == ""
+        return [item.name for item in tools]
+
+    assert await visible() == [left_tool, right_tool]
+    assert (await dispatcher.execute_tool(principal, left_tool, {})).is_error is False
+    assert (await dispatcher.execute_tool(principal, right_tool, {})).is_error is False
+    assert listing.calls == [left_tool, right_tool]
+
+    assert await memory.revoke_permission(issued.key_id, left_tool) is True
+    assert await visible() == [right_tool]
+    denied = await dispatcher.execute_tool(principal, left_tool, {})
+    assert denied.is_error is True
+    assert denied.content[0].text == "Permission denied."
+    assert listing.calls == [left_tool, right_tool]
+    kept = await dispatcher.execute_tool(principal, right_tool, {})
+    assert kept.is_error is False
+    assert listing.calls == [left_tool, right_tool, right_tool]
+
+
+@pytest.mark.asyncio
+async def test_admin_discovery_summary_lists_dynamic_store_registrations(launch_app) -> None:
+    store = InMemoryStore()
+    await store.create_user("ada", hash_password("password-value-ok"), "admin")
+    canonical = "0123456789abcdef"
+    await store.save_upstream(f"store_{canonical}", mcp_url(namespace_for(canonical)), False, "")
+    await store.save_upstream("store_fedcba9876543210", "http://10.1.2.3/mcp", False, "")
+    gateway = launch_app(create_app(Settings(upstreams=[]), store=store))
+    async with _client(gateway) as admin_client:
+        assert (await admin_client.post("/admin/login", json={"username": "ada", "password": "password-value-ok"})).status_code == 200
+        summary = await admin_client.get("/admin/discovery")
+    assert summary.status_code == 200
+    body = summary.json()
+    assert set(body) == {
+        "candidate_count",
+        "advertised_count",
+        "excluded",
+        "collisions",
+        "upstreams",
+        "store_registrations",
+        "last",
+    }
+    assert body["store_registrations"] == [
+        {"upstream_id": "store_0123456789abcdef", "enabled": False, "registration": "canonical"},
+        {"upstream_id": "store_fedcba9876543210", "enabled": False, "registration": "not_canonical"},
+    ]
+    assert "http://" not in summary.text

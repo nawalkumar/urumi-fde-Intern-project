@@ -1,0 +1,79 @@
+{
+  "generatedAt": "20261025T122221Z",
+  "context": "kind-urumi-k8s-test",
+  "scope": "Read-only verification of gateway multi-store discovery, authorization, tool execution, and audit before Store C deletion.",
+  "stores": {
+    "174c75b6c0ef57e5": "acceptance-store-b",
+    "5bc7dc01da3ccf38": "acceptance-store-c"
+  },
+  "interfaces": {
+    "mcp": "POST /mcp (tools/list, tools/call) requires Authorization: Bearer <raw gateway API key>. tools/list returns only tools the key may call.",
+    "chat": "POST /admin/chat requires a live urumi_session cookie or urs_ session token. A gateway API key cannot call it. Tools come from the session user's live keys and exact grants.",
+    "admin": "/admin/* routes, including /admin/discovery and /admin/audit, require an admin session."
+  },
+  "credentialAvailability": {
+    "rawKey013b6aeafe9ea69c": "not available. Gateway pod env has no API key, /tmp holds only urumi-store-cookie, /home/urumi holds only shell dotfiles, host env has no matching variable. Earlier evidence records /tmp/urumi-store-b-key removed without reading.",
+    "gatewayPodCookie": "urumi-store-cookie belongs to session 5f465f6cf7416ac6, revoked 2026-10-25T10:48:25Z",
+    "liveSessions": ["6dbf2a2bab4e22d6 (owner's dashboard browser session, created 10:49:21Z, expires 22:49:21Z); token not accessible to the agent"],
+    "notUsed": "No Secret value was read. No key, session, or password was created, reset, or used. Home-directory password files were listed by name only and not opened."
+  },
+  "grants": {
+    "key_id": "013b6aeafe9ea69c",
+    "user_id": "169d3b25942f065b",
+    "created_at": "2026-10-25T08:50:41.39413Z",
+    "revoked": false,
+    "tool_names": [
+      "store_174c75b6c0ef57e5__list_orders",
+      "store_5bc7dc01da3ccf38__list_orders"
+    ],
+    "storeOwner": "169d3b25942f065b for both stores"
+  },
+  "auditRows": [
+    {"id": 37, "occurred_at": "2026-10-25T11:27:45.682934Z", "actor": "169d3b25942f065b", "tool_name": "admin:create_store", "outcome": "success", "upstream_id": "store_5bc7dc01da3ccf38", "target": "5bc7dc01da3ccf38"},
+    {"id": 38, "occurred_at": "2026-10-25T11:30:04.391909Z", "actor": "169d3b25942f065b", "tool_name": "admin:provision_store", "outcome": "success", "upstream_id": "store_5bc7dc01da3ccf38", "target": "5bc7dc01da3ccf38"},
+    {"id": 39, "occurred_at": "2026-10-25T12:05:04.131627Z", "actor": "169d3b25942f065b", "tool_name": "admin:grant_permission", "outcome": "success", "target": "013b6aeafe9ea69c store_5bc7dc01da3ccf38__list_orders"},
+    {"id": 40, "occurred_at": "2026-10-25T12:15:49.400732Z", "actor": "013b6aeafe9ea69c", "user_id": "169d3b25942f065b", "tool_name": "store_174c75b6c0ef57e5__list_orders", "outcome": "success", "upstream_id": "store_174c75b6c0ef57e5", "duration_ms": 2737},
+    {"id": 41, "occurred_at": "2026-10-25T12:15:52.203573Z", "actor": "013b6aeafe9ea69c", "user_id": "169d3b25942f065b", "tool_name": "store_5bc7dc01da3ccf38__list_orders", "outcome": "success", "upstream_id": "store_5bc7dc01da3ccf38", "duration_ms": 1684},
+    {"id": 42, "occurred_at": "2026-10-25T12:15:55.374212Z", "actor": "013b6aeafe9ea69c", "user_id": "169d3b25942f065b", "tool_name": "chat", "outcome": "success"}
+  ],
+  "auditNotes": [
+    "Rows 40-42 come from the owner's dashboard chat at 12:15Z. The agent did not send that chat. The prompt and answer text are not stored in the audit log and were not observed by the agent.",
+    "No denied or unauthorized row exists after 11:00Z. An ungranted-tool denial with key 013b6aeafe9ea69c was not run because its raw value is not available."
+  ],
+  "unauthenticatedProbes": {
+    "from": "inside the gateway pod to 127.0.0.1:8000, no credential",
+    "GET /health": 200,
+    "POST /mcp tools/list": "401 invalid_token Authentication required.",
+    "POST /mcp tools/call store_5bc7dc01da3ccf38__list_orders": "401 invalid_token Authentication required.",
+    "GET /admin/discovery": "401 invalid_token Authentication required.",
+    "auditRowsWritten": "The two POST /mcp probes wrote audit rows 43 and 44 (2026-10-25T12:22:45Z, actor unauthenticated, outcome unauthorized, empty tool name), as ApiKeyGuard records every rejected request. GET /admin/discovery wrote none."
+  },
+  "storeDataCorroboration": {
+    "174c75b6c0ef57e5": "1 shop_order: id 10, wc-pending, 2026-10-25 11:49:11, total 11.00, marker URUMI-MS08-6-STORE-B-174c75b6c0ef57e5-20261025; 0 products",
+    "5bc7dc01da3ccf38": "1 shop_order: id 10, wc-pending, 2026-10-25 11:49:38, total 22.00, marker URUMI-MS08-6-STORE-C-5bc7dc01da3ccf38-20261025; 0 products",
+    "limit": "Read from each store database. This is not the gateway tool response."
+  },
+  "health": {
+    "defaultNamespace": "dashboard, gateway, gateway-db, store-db, provisioner, support-mcp, utility-mcp, woocommerce-mcp, wordpress all Ready with 0 restarts; wordpress-init Succeeded; gateway /health 200",
+    "baselineWooCommerceMcp": "health ok, woocommerce_api not_configured. Its key and secret are optional references to Secret urumi-test-woocommerce, which does not exist. Deployment generation 1 since 2026-10-25T03:50:03Z, so this predates the multi-store work and is not a regression.",
+    "baselineVolumes": ["data-urumi-gateway-db-0 Bound pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971", "data-urumi-store-db-0 Bound pvc-8ca68528-e380-4896-a925-335cafddda34", "urumi-wordpress-data Bound pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a"],
+    "st-174c75b6c0ef57e5": "store-db, woo-mcp, wordpress Ready, 0 restarts; init Succeeded; MCP configured; mysqld alive",
+    "st-5bc7dc01da3ccf38": "store-db, woo-mcp, wordpress Ready, 0 restarts; init Succeeded; MCP configured; mysqld alive",
+    "gatewayRows": "both stores ready at attempt 0; upstreams store_174c75b6c0ef57e5 and store_5bc7dc01da3ccf38 enabled",
+    "storeNamespaces": ["st-174c75b6c0ef57e5", "st-5bc7dc01da3ccf38"]
+  },
+  "criteria": {
+    "MS-05f": "PROVEN: rows 40 and 41 reached each store's upstream with success and a duration.",
+    "MS-08-5": "PROVEN: one live key, 013b6aeafe9ea69c, holds exactly both store list_orders grants; Store C's was added through the dashboard (row 39).",
+    "MS-08-6": "PROVEN: see synthetic-orders-20261025T114938Z.json and storeDataCorroboration.",
+    "MS-08-7": "PARTIAL: row 42 shows one successful dashboard chat by the owner. Prompt text not captured.",
+    "MS-08-8": "PROVEN: rows 40 and 41, both store list_orders tools called within 3 s, immediately before chat row 42.",
+    "MS-08-9": "UNTESTED by agent: answer text not observed. Needs the owner's screenshot or copied answer showing 11.00 for Store B and 22.00 for Store C.",
+    "MS-08-10": "PROVEN: rows 40 and 41 carry actor key, user, upstream, tool, time, duration, and outcome.",
+    "MS-08-16": "PROVEN with earlier evidence: create (row 37 and earlier Store A rows), chat (row 42), delete and denied stale call (store-a-delete-20261025T085339Z.json).",
+    "MS-03f": "Supporting: the chat offered and called exactly the two granted store tools. tools/list was not observed directly.",
+    "MS-03g": "Not re-tested: no ungranted call with a valid key. Unauthenticated calls are refused with 401."
+  },
+  "secretsPrinted": false,
+  "writes": "none to the cluster; this file only"
+}

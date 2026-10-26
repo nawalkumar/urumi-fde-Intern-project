@@ -1,0 +1,93 @@
+{
+  "generatedAt": "20261025T081033Z",
+  "context": "kind-urumi-k8s-test",
+  "commands": [
+    "pytest tests/test_store_manifests.py tests/test_store_kube.py tests/test_store_routing.py tests/test_stores.py tests/test_networkpolicy_intent.py tests/test_discovery_policy.py -q  -> 59 passed",
+    "docker build -f apps/gateway/Dockerfile -t urumi-gateway:pvc-labels-20261025T080649Z .  -> exit 0",
+    "kind load docker-image urumi-gateway:pvc-labels-20261025T080649Z --name urumi-k8s-test",
+    "helm template ... -f helm/urumi/values-kind-urumi-k8s-test.local.yaml  -> exit 0",
+    "kubectl --context kind-urumi-k8s-test apply --dry-run=server -n default -f <render>  -> accepted, not persisted",
+    "helm upgrade urumi helm/urumi --kube-context kind-urumi-k8s-test --namespace default --timeout 20m -f helm/urumi/values-kind-urumi-k8s-test.local.yaml  -> revision 7 deployed"
+  ],
+  "image": {
+    "tag": "urumi-gateway:pvc-labels-20261025T080649Z",
+    "dockerImageId": "sha256:a07ccac185ca98b4113ff4486efbcdca01d60ee30ead29c842bc482619bb7d44",
+    "devNodeHasTag": false
+  },
+  "valuesChange": [
+    [
+      "gateway.image.tag",
+      "job-stable-20261025T071558Z",
+      "pvc-labels-20261025T080649Z"
+    ]
+  ],
+  "manifestDiffRev6ToRev7": "gateway and store-provisioner image lines only; wordpress-init Job appears only because helm get manifest omits hooks",
+  "release": {
+    "revision": 7,
+    "status": "deployed"
+  },
+  "rollout": {
+    "gateway": "rolled out",
+    "storeProvisioner": "rolled out",
+    "baselineReady": true,
+    "baselineRestarts": 0,
+    "baselineInitHook": "Succeeded"
+  },
+  "runningCodeHashes": {
+    "manifests.py": "332ec2c0d9bde83f...",
+    "cluster.py": "648e397276d14958...",
+    "keepsLiveClaimTemplate": true,
+    "pods": [
+      "urumi-gateway",
+      "urumi-store-provisioner"
+    ]
+  },
+  "storeA": {
+    "state": "ready",
+    "attempt": 0,
+    "podsRestarted": false,
+    "statefulSetGeneration": 1,
+    "statefulSetClaimTemplateLabels": "empty (existing template unchanged; immutable)",
+    "pvcLabelsUnchanged": {
+      "app.kubernetes.io/component": "store-db",
+      "app.kubernetes.io/name": "urumi-store"
+    },
+    "pvcs": {
+      "data-store-db-0": "pvc-cfec2069-30de-43ee-b62f-7f02c16a7aa3",
+      "wordpress-data": "pvc-00ba996f-ea68-4f44-ab5d-26184b9201c7"
+    },
+    "upstream": "store_c4421147ea825bbc enabled at canonical URL, no credential",
+    "gatewayPodReachesStoreMcp": "tools/list returned 6 tools from the new gateway pod"
+  },
+  "baselinePvcs": {
+    "data-urumi-gateway-db-0": "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971",
+    "data-urumi-store-db-0": "pvc-8ca68528-e380-4896-a925-335cafddda34",
+    "urumi-wordpress-data": "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a"
+  },
+  "keys": {
+    "03ab04ae83ba0191": {
+      "owner": "169d3b25942f065b",
+      "permissions": [
+        "store_c4421147ea825bbc__list_orders"
+      ],
+      "liveCallRepeated": false,
+      "reason": "raw value was discarded after the 08:01Z test and no new key was issued"
+    },
+    "40ab7159b6c06f90": {
+      "owner": null,
+      "permissions": []
+    }
+  },
+  "warningsSinceUpgrade": [
+    "gateway startup probe during rollout at 08:08:45Z; Ready after"
+  ],
+  "memory": {
+    "hostAvailableMiB": 2458,
+    "testNodeGiB": 2.947
+  },
+  "notClaimed": [
+    "existing data-store-db-0 has new labels",
+    "a live authorized call after the upgrade"
+  ],
+  "matrixChanged": false
+}

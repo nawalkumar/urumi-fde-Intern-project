@@ -1,0 +1,130 @@
+{
+  "generatedAt": "20261025T090853Z",
+  "context": "kind-urumi-k8s-test",
+  "phase2_keyFileCleanup": {
+    "pod": "urumi-gateway-7d5dd886cc-jn59v",
+    "path": "/tmp/urumi-store-b-key",
+    "before": {
+      "mode": "600",
+      "owner": "urumi",
+      "sizeBytes": 82
+    },
+    "contentsRead": false,
+    "command": "kubectl --context kind-urumi-k8s-test exec -n default urumi-gateway-7d5dd886cc-jn59v -- rm -f -- /tmp/urumi-store-b-key",
+    "after": "absent; /tmp contains only urumi-store-cookie",
+    "key013b6aeafe9ea69c": "left active with only store_174c75b6c0ef57e5__list_orders; raw value no longer stored anywhere"
+  },
+  "phase3_chatFeasibility": {
+    "chatSecret": "urumi-test-chat absent; CHAT_API_KEY, CHAT_API_URL, CHAT_MODEL unset in the gateway",
+    "providerDefault": "https://api.openai.com/v1/chat/completions, model gpt-4o-mini (apps/gateway/app/chat_provider.py)",
+    "egress": "networkPolicy.allowExternalEgress false; gateway egress has no public 443 rule. Enabling it is a Helm upgrade that adds TCP 443 to public addresses (private ranges excluded) for the gateway and baseline init Job.",
+    "chatToolScope": "ChatService uses the session user's live keys and their exact grants (chat.py _granted_names/_visible_tools); no new key is needed",
+    "orders": "Store B list_orders returned 'No orders found.' text length; no order exists in Store B or any second store",
+    "secondStore": "Store A is deleted; a comparison needs a new store C (about 576 MiB requests, 1.25 GiB limits; observed provisioning peak about +0.3 GiB on the node)",
+    "verdict": "BLOCKED pending approval: a user-created urumi-test-chat Secret, a Helm upgrade enabling allowExternalEgress, a new store, and one test order per store"
+  },
+  "phase4_dashboard": {
+    "liveUiUsed": false,
+    "componentTests": "npx vitest run src/admin/StorePanel.test.tsx src/admin/ChatPanel.test.tsx -> 2 files, 10 passed; full dashboard suite 6 files, 34 passed",
+    "storePanelTests": [
+      "shows an empty store list",
+      "shows a load error",
+      "creates a store and renders ready details without marking a failed store ready",
+      "shows a validation error and ignores a second submit while the first is pending",
+      "confirms deletion of the named store and renders a failure reason"
+    ],
+    "gap": "dashboard create and delete were not performed against the live gateway; live lifecycle evidence is API-only"
+  },
+  "phase5_fix": {
+    "files": [
+      "apps/gateway/app/stores/service.py",
+      "tests/test_stores.py"
+    ],
+    "change": "request_delete sets deadline_at; _teardown passes failed=True only for exceptions from namespace delete or volume cleanup; _note_delete_incomplete caps attempt at max_attempts for failures, resets it on accepted progress, and sets delete_blocked only at the cap or after the deadline; volume-cleanup exceptions are now caught",
+    "updatedTest": "test_terminating_namespace_times_out_without_claiming_deletion now advances the clock past the deadline before expecting delete_blocked",
+    "newTests": [
+      "test_already_absent_namespace_deletes_without_an_attempt",
+      "test_terminating_passes_do_not_count_as_failed_attempts",
+      "test_failed_deletes_stop_at_the_attempt_limit_then_recover",
+      "test_duplicate_delete_requests_keep_the_deletion_in_progress"
+    ],
+    "results": [
+      "pytest tests/test_stores.py tests/test_store_kube.py -q -> 43 passed",
+      "pytest store/routing/manifest/network/discovery focused set -> 63 passed",
+      "pytest -q --ignore=tests/test_postgres_permissions.py --ignore=tests/test_reset_admin_password_postgres.py -> 312 passed",
+      "dashboard npx vitest run -> 34 passed"
+    ],
+    "deployed": false,
+    "deploymentImplication": "needs a new gateway image, kind load to the test node, and a Helm upgrade to revision 8 (gateway and provisioner restart). Not done."
+  },
+  "post": {
+    "helmRevision": 7,
+    "default": {
+      "unready": [],
+      "restarts": 0
+    },
+    "st-174c75b6c0ef57e5": {
+      "unready": [],
+      "restarts": 0
+    },
+    "namespaces": [
+      "calico-system",
+      "default",
+      "kube-node-lease",
+      "kube-public",
+      "kube-system",
+      "local-path-storage",
+      "st-174c75b6c0ef57e5",
+      "tigera-operator"
+    ],
+    "pvs": {
+      "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a": "default/urumi-wordpress-data Bound",
+      "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7": "st-174c75b6c0ef57e5/data-store-db-0 Bound",
+      "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971": "default/data-urumi-gateway-db-0 Bound",
+      "pvc-8ca68528-e380-4896-a925-335cafddda34": "default/data-urumi-store-db-0 Bound",
+      "pvc-9cc41993-f39d-4f92-8204-7974b4546771": "st-174c75b6c0ef57e5/wordpress-data Bound"
+    },
+    "stores": [
+      [
+        "174c75b6c0ef57e5",
+        "Ready"
+      ]
+    ],
+    "keys": [
+      [
+        "013b6aeafe9ea69c",
+        "169d3b25942f065b",
+        false,
+        [
+          "store_174c75b6c0ef57e5__list_orders"
+        ]
+      ],
+      [
+        "03ab04ae83ba0191",
+        "169d3b25942f065b",
+        false,
+        []
+      ],
+      [
+        "40ab7159b6c06f90",
+        null,
+        false,
+        []
+      ],
+      [
+        "bfca9a84d7b4380d",
+        "169d3b25942f065b",
+        true,
+        [
+          "store_174c75b6c0ef57e5__list_orders"
+        ]
+      ]
+    ],
+    "gatewayTmp": [
+      "urumi-store-cookie"
+    ],
+    "hostAvailableMiB": 2574,
+    "testNode": "2.831GiB / 7.58GiB"
+  },
+  "matrixStatusChanges": []
+}

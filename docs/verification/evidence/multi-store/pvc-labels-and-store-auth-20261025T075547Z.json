@@ -1,0 +1,61 @@
+{
+  "generatedAt": "20261025T075547Z",
+  "context": "kind-urumi-k8s-test",
+  "clusterMutations": false,
+  "helmRevision": 6,
+  "taskA_pvcLabels": {
+    "rootCause": "apps/gateway/app/stores/manifests.py _db_statefulset built volumeClaimTemplates[0].metadata with only name 'data'. The StatefulSet controller creates data-store-db-0 from that template and adds the pod selector labels, so the claim got only app.kubernetes.io/component and app.kubernetes.io/name.",
+    "severity": "low: traceability and label-selector gap, not an isolation or deletion bug",
+    "whyNotSecurityCritical": [
+      "Store deletion deletes namespace st-<id>; the claim goes with it.",
+      "Volume cleanup selects PersistentVolumes by spec.claimRef.namespace == st-<id>, not by PVC labels.",
+      "The provisioner never reads, updates, or deletes data-store-db-0; the StatefulSet controller owns it.",
+      "Admission matches only the provisioner ServiceAccount; the claim is created by the controller."
+    ],
+    "liveClaim": "data-store-db-0 Bound pvc-cfec2069-30de-43ee-b62f-7f02c16a7aa3, labels unchanged, not patched",
+    "sourceFix": [
+      "manifests.py: claim template metadata.labels = labels(spec, 'store-db') (store-id, owner-id, store, name, component, managed-by, part-of)",
+      "cluster.py apply: when an existing StatefulSet is updated, keep the live spec.volumeClaimTemplates, because that field cannot change after create"
+    ],
+    "retroactive": false,
+    "followUp": "Only stores created after a new gateway image is deployed get labeled claims. acceptance-store-a keeps the unlabeled claim. Options: leave it (safe), or an owner-approved one-time 'kubectl --context kind-urumi-k8s-test label pvc data-store-db-0 -n st-c4421147ea825bbc urumi.dev/store-id=c4421147ea825bbc urumi.dev/owner-id=169d3b25942f065b urumi.dev/store=true'. That label write does not touch data."
+  },
+  "taskB_authorization": {
+    "registration": "provisioner _register saves dynamic upstream store_<id> at http://woo-mcp.st-<id>.svc.cluster.local:8000/mcp; gateway registry lists its tools as store_<id>__<tool>",
+    "advertisedVsUsable": "6 tools advertised and registered; none listed or callable for the current key",
+    "listFilter": "discovery.collect_authorized: exact grant on the key, then routing.store_block_reason",
+    "callCheck": "dispatch.execute_tool: key active, exact grant, then store_call_allowed",
+    "storeRule": "caller user_id equals store owner_user_id, store state ready, upstream id store_<id>, saved upstream enabled at the canonical URL",
+    "grantPath": "POST /admin/keys/{key_id}/permissions by an admin; for a store tool the key must have user_id equal to the store owner",
+    "currentKey": {
+      "key_id": "40ab7159b6c06f90",
+      "user_id": null,
+      "permissions": []
+    },
+    "verdict": "expected deny-by-default. The key was issued by 'provision issue', which creates a key with no owner, so the admin API refuses store grants for it and dispatch would deny it even if a grant row existed.",
+    "missingPrerequisite": "a key owned by acceptance-admin (169d3b25942f065b), issued via POST /admin/keys, plus a grant of store_c4421147ea825bbc__list_orders. Both are live writes and were not done.",
+    "unitCoverage": [
+      "tests/test_store_routing.py::test_cross_owner_store_tool_is_denied_without_an_upstream_call",
+      "tests/test_store_routing.py::test_admin_cannot_grant_another_users_store_tool",
+      "tests/test_store_routing.py::test_admin_cannot_grant_a_store_tool_to_a_key_without_an_owner",
+      "tests/test_store_routing.py::test_deleting_store_is_not_called_and_another_store_cannot_be_selected"
+    ]
+  },
+  "tests": [
+    {
+      "command": "pytest tests/test_store_manifests.py tests/test_store_kube.py tests/test_store_routing.py tests/test_stores.py tests/test_networkpolicy_intent.py tests/test_discovery_policy.py -q --tb=short",
+      "passed": 59,
+      "failed": 0
+    },
+    {
+      "command": "pytest -q --tb=line --ignore=tests/test_postgres_permissions.py --ignore=tests/test_reset_admin_password_postgres.py",
+      "passed": 308,
+      "failed": 0
+    }
+  ],
+  "newTests": [
+    "tests/test_store_manifests.py::test_resources_are_named_and_labeled_for_one_store (claim template labels)",
+    "tests/test_store_kube.py::test_existing_statefulset_keeps_its_live_claim_template"
+  ],
+  "matrixCountsChanged": false
+}

@@ -1,0 +1,186 @@
+{
+  "generatedAt": "2026-10-25T13:30:49Z",
+  "auditSnapshotAt": "2026-10-25T13:30:27Z",
+  "context": "kind-urumi-k8s-test",
+  "scope": "Read-only verification of two Cursor MCP client list_orders calls through the test gateway, their audit rows, and the Cursor MCP configuration. No secret values were read into this file.",
+  "protectedContext": "kind-urumi-k8s-dev is the kubectl current-context on this host. Every kubectl command in this task passed --context kind-urumi-k8s-test explicitly. kind-urumi-k8s-dev was not used.",
+  "gateway": {
+    "endpoint": "http://127.0.0.1:18082/mcp",
+    "transport": "kubectl --context kind-urumi-k8s-test -n default port-forward --address 127.0.0.1 svc/urumi-gateway 18082:8000 (pid 1007230, listener 127.0.0.1:18082)",
+    "pod": "default/urumi-gateway-57c67d754c-6bt82, Running, 0 restarts",
+    "auditTable": "gateway_audit_log in default/urumi-gateway-db-0 (postgres:16-alpine)"
+  },
+  "key": {
+    "key_id": "d81bf7a2acd3750f",
+    "user_id": "169d3b25942f065b",
+    "created_at": "2026-10-25T12:38:16.571798Z",
+    "revoked_at": null,
+    "grants": [
+      "store_174c75b6c0ef57e5__list_orders",
+      "store_5bc7dc01da3ccf38__list_orders"
+    ],
+    "setupAuditRows": [
+      {"id": 45, "occurred_at": "2026-10-25T12:38:16.588240Z", "actor": "169d3b25942f065b", "tool_name": "admin:issue_key", "outcome": "success", "target": "d81bf7a2acd3750f"},
+      {"id": 46, "occurred_at": "2026-10-25T12:39:12.467102Z", "actor": "169d3b25942f065b", "tool_name": "admin:grant_permission", "outcome": "success", "target": "d81bf7a2acd3750f store_174c75b6c0ef57e5__list_orders"},
+      {"id": 47, "occurred_at": "2026-10-25T12:39:26.699402Z", "actor": "169d3b25942f065b", "tool_name": "admin:grant_permission", "outcome": "success", "target": "d81bf7a2acd3750f store_5bc7dc01da3ccf38__list_orders"}
+    ],
+    "rawKeyRecorded": false
+  },
+  "mcpClient": {
+    "client": "Cursor agent CallDynamicTool, namespace user-urumi-test",
+    "toolsVisibleInCursor": [
+      "store_174c75b6c0ef57e5__list_orders",
+      "store_5bc7dc01da3ccf38__list_orders"
+    ],
+    "toolsVisibleNote": "Cursor also lists its own mcp_auth helper in the namespace. That helper is a Cursor client feature, not a gateway tool. Gateway tools/list is not audited, so the tool list comes from Cursor's catalog, not the audit log.",
+    "arguments": {
+      "after": "2026-10-25T00:00:00Z",
+      "before": "2026-10-26T00:00:00Z",
+      "per_page": 100,
+      "status": "(default, empty)"
+    },
+    "callsIssued": "Both calls were issued in parallel in one agent step at about 18:50 IST (13:20Z)."
+  },
+  "calls": [
+    {
+      "store": "B",
+      "store_id": "174c75b6c0ef57e5",
+      "store_name": "acceptance-store-b",
+      "tool": "store_174c75b6c0ef57e5__list_orders",
+      "mcpResponse": "id=10 status=pending total=11.00 currency=USD created=2026-10-25T11:49:11",
+      "orders": [
+        {"order_id": 10, "status": "pending", "total": "11.00", "currency": "USD", "created": "2026-10-25T11:49:11", "created_gmt_from_store_db": "2026-10-25 11:49:11"}
+      ],
+      "auditRow": {
+        "id": 51,
+        "occurred_at": "2026-10-25T13:20:39.127304Z",
+        "actor": "d81bf7a2acd3750f",
+        "user_id": "169d3b25942f065b",
+        "tool_name": "store_174c75b6c0ef57e5__list_orders",
+        "outcome": "success",
+        "upstream_id": "store_174c75b6c0ef57e5",
+        "duration_ms": 3834,
+        "derivedStart": "about 2026-10-25T13:20:35.29Z (occurred_at minus duration_ms)"
+      },
+      "gatewayAccessLog": "2026-10-25T13:20:39.135511Z 127.0.0.1:39076 POST /mcp 200 OK"
+    },
+    {
+      "store": "C",
+      "store_id": "5bc7dc01da3ccf38",
+      "store_name": "acceptance-store-c",
+      "tool": "store_5bc7dc01da3ccf38__list_orders",
+      "mcpResponse": "id=10 status=pending total=22.00 currency=USD created=2026-10-25T11:49:38",
+      "orders": [
+        {"order_id": 10, "status": "pending", "total": "22.00", "currency": "USD", "created": "2026-10-25T11:49:38", "created_gmt_from_store_db": "2026-10-25 11:49:38"}
+      ],
+      "auditRow": {
+        "id": 50,
+        "occurred_at": "2026-10-25T13:20:39.085791Z",
+        "actor": "d81bf7a2acd3750f",
+        "user_id": "169d3b25942f065b",
+        "tool_name": "store_5bc7dc01da3ccf38__list_orders",
+        "outcome": "success",
+        "upstream_id": "store_5bc7dc01da3ccf38",
+        "duration_ms": 2744,
+        "derivedStart": "about 2026-10-25T13:20:36.34Z (occurred_at minus duration_ms)"
+      },
+      "gatewayAccessLog": "2026-10-25T13:20:39.094783Z 127.0.0.1:39086 POST /mcp 200 OK"
+    }
+  ],
+  "auditMatching": {
+    "method": "Read-only psql (default_transaction_read_only=on) of gateway_audit_log rows with occurred_at >= 2026-10-25T12:20:00Z, named columns only.",
+    "result": "Matched. Key d81bf7a2acd3750f has exactly 2 audit rows (50 and 51), both outcome success with upstream_id and duration_ms set. No row for this key has any other outcome. Max audit id at snapshot: 51.",
+    "authorization": "dispatch.py writes a tool row with outcome success only after authentication, the key grant check, and the store ownership check pass, and the upstream call returns without is_error. A failed authorization writes outcome unauthorized instead.",
+    "upstreamExecution": "upstream_id and duration_ms are set only on rows written after the registry call to the store upstream returns.",
+    "timestampSemantics": "occurred_at is written after the upstream call completes, so row 50 (Store C) precedes row 51 (Store B) by completion order, not by issue order.",
+    "orderFieldsNotInAudit": "By design, audit rows hold no arguments or results. Order IDs, statuses, totals, and currencies are matched against the MCP responses and the store databases, not the audit log.",
+    "storeDbCorroboration": {
+      "174c75b6c0ef57e5": "wp_posts: one shop_order, ID 10, wc-pending, post_date and post_date_gmt 2026-10-25 11:49:11. Options: gmt_offset 0, timezone_string empty, woocommerce_currency USD.",
+      "5bc7dc01da3ccf38": "wp_posts: one shop_order, ID 10, wc-pending, post_date and post_date_gmt 2026-10-25 11:49:38. Options: gmt_offset 0, timezone_string empty, woocommerce_currency USD.",
+      "dateWindow": "Both stores run in UTC, so the after and before bounds cover 2026-10-25 UTC."
+    },
+    "otherRowsInWindow": [
+      {"id": 43, "occurred_at": "2026-10-25T12:22:45.628177Z", "outcome": "unauthorized", "actor": "unauthenticated", "attribution": "earlier unauthenticated probe, recorded in gateway-multistore-verification-20261025T122221Z.json"},
+      {"id": 44, "occurred_at": "2026-10-25T12:22:45.639901Z", "outcome": "unauthorized", "actor": "unauthenticated", "attribution": "same earlier probe"},
+      {"id": 48, "occurred_at": "2026-10-25T12:56:59.771110Z", "outcome": "unauthorized", "actor": "unauthenticated", "attribution": "Cursor connection attempt from project-level server project-0-urumi-project-urumi-test. Cursor's MCP log shows 401 invalid_token at 18:26:59.822 IST (12:56:59.822Z); gateway access log shows POST /mcp 401 at 12:56:59.781Z."},
+      {"id": 49, "occurred_at": "2026-10-25T13:14:42.091529Z", "outcome": "unauthorized", "actor": "unauthenticated", "attribution": "Agent's credential-free diagnostic POST to 127.0.0.1:18082/mcp during config diagnosis, before this task. Gateway access log shows 401 at 13:14:42.101Z."}
+    ],
+    "nonAuditedMcpTraffic": [
+      "2026-10-25T13:18:27.931Z POST /mcp 200, 13:18:28.004Z POST /mcp 202, 13:18:28.137Z GET /mcp 200, 13:18:31.94Z three POST /mcp 200: Cursor handshake and listing for user-urumi-test. ~/.cursor/mcp.json was written at 13:18:27.575Z.",
+      "2026-10-25T13:23:58.100Z and 13:29:08.498Z POST /mcp 200: no audit row, so not tool calls (most likely listing or ping)."
+    ]
+  },
+  "mcpConfiguration": {
+    "filesInspected": [
+      {
+        "path": "/home/naval/project/urumi-project/.cursor/mcp.json",
+        "scope": "project",
+        "mode": "600",
+        "owner": "naval",
+        "mtime": "2026-10-25T12:37:43Z",
+        "server": "urumi-test",
+        "url": "http://127.0.0.1:18082/mcp",
+        "headerNames": ["Authorization"],
+        "authorizationForm": "Bearer ${env:URUMI_TEST_GATEWAY_KEY}",
+        "envPlaceholderPresent": true,
+        "cursorNamespace": "project-0-urumi-project-urumi-test"
+      },
+      {
+        "path": "/home/naval/.cursor/mcp.json",
+        "scope": "user (WSL home of the Cursor remote server)",
+        "mode": "600",
+        "owner": "naval",
+        "mtime": "2026-10-25T13:18:27Z",
+        "server": "urumi-test",
+        "url": "http://127.0.0.1:18082/mcp",
+        "headerNames": ["Authorization"],
+        "authorizationForm": "Bearer <literal value, 64 characters, not recorded>",
+        "envPlaceholderPresent": false,
+        "cursorNamespace": "user-urumi-test",
+        "writtenBy": "Helper /tmp/write_urumi_mcp.py, run by the owner in terminal shell pid 374685. The helper reads URUMI_TEST_GATEWAY_KEY from that shell, writes the file with mode 600, and prints no value. The terminal shows only its confirmation line."
+      },
+      {
+        "path": "/mnt/c/Users/*/.cursor/mcp.json",
+        "scope": "Windows-side user config",
+        "result": "none found"
+      }
+    ],
+    "environmentVariable": {
+      "name": "URUMI_TEST_GATEWAY_KEY",
+      "cursorServerAndExtensionHostProcesses": "unset in all 7 checked (pids 1478, 1490, 2125, 374276, 374287, 374635, 891142), by /proc/<pid>/environ presence check only",
+      "ownerTerminalShellPid374685": "set, according to the shell's own [ -n ] check shown in its transcript. /proc cannot confirm it because the shell exported it after it started. Value not displayed.",
+      "agentShell": "unset"
+    },
+    "whichConfigCursorUses": "user-urumi-test from /home/naval/.cursor/mcp.json. The calls authenticated as key d81bf7a2acd3750f. The project config cannot send a usable token because the placeholder resolves only from Cursor's process environment, where the variable is unset; its 2026-10-25T12:56:59Z attempt was rejected (row 48).",
+    "statusVsDisk": "Both files define a server named urumi-test with the same URL. Cursor listed project-0-urumi-project-urumi-test as a namespace at the start of the session (connection failed with 401). The current catalog shows only user-urumi-test, status ready. The disk config explains the 401, but why the project namespace no longer appears (deduplication by name, hiding of failed servers, or a refresh) is not established."
+  },
+  "limitations": [
+    "Audit rows and gateway access logs carry no client identity or user agent, and all traffic arrives from 127.0.0.1 through the port-forward. Attribution of rows 50 and 51 to the Cursor MCP client rests on: actor d81bf7a2acd3750f; timing that matches the agent's two parallel CallDynamicTool calls; matching results; and no terminal transcript showing another client calling the gateway in that window.",
+    "The token in /home/naval/.cursor/mcp.json was not compared to the key record (no hashing or value read). Its identity is inferred because Cursor's authenticated calls resolved to actor d81bf7a2acd3750f and the project config cannot supply a token.",
+    "The raw key also remains as an exported variable in the owner's terminal shell pid 374685. This file does not establish how the owner first obtained the raw key beyond audit row 45 (admin:issue_key by 169d3b25942f065b).",
+    "Why Cursor stopped listing the project-level namespace is not established.",
+    "No negative-permission (ungranted tool) test was run in this task."
+  ],
+  "openItems": [
+    "The project-level .cursor/mcp.json still defines urumi-test with an unresolvable ${env:URUMI_TEST_GATEWAY_KEY} placeholder. It was not renamed or disabled.",
+    "/home/naval/.cursor/mcp.json holds the raw temporary key (mode 600). Remove it when the key is revoked.",
+    "/tmp/write_urumi_mcp.py remains. It contains no secret.",
+    "Terminal 1 scrollback contains the acceptance-admin password printed by an earlier cat of /tmp/urumi-ui-admin. The value is not recorded here."
+  ],
+  "mutations": {
+    "cluster": "None. Kubernetes access was get, logs, and exec with read-only psql (default_transaction_read_only=on). No store, grant, key, Secret, Helm, or cluster configuration was changed.",
+    "keysAndGrants": "No key was created, revoked, or rotated. No grant was changed.",
+    "mcpToolCallsThisTask": "None. Rows 50 and 51 come from the earlier step.",
+    "git": "Nothing was staged, committed, pushed, reset, cleaned, stashed, or discarded.",
+    "files": "This evidence file only."
+  },
+  "secretScan": {
+    "jsonParses": true,
+    "fullRawTokenPresent": false,
+    "urkPrefixedValuePresent": false,
+    "literalBearerValuePresent": false,
+    "adminPasswordPresent": false,
+    "sixteenCharacterOverlap": "One 16-character substring of the stored token appears in this file. Gateway tokens have the form urk_<16-hex key id>.<token_urlsafe(32) secret> (apps/gateway/app/keys.py generate_key), 64 characters in total, which matches the stored literal's length. The key id is public and recorded here by design. A follow-up check to confirm the overlap is exactly the key id was not run, because it would read the raw token again."
+  },
+  "secretsPrinted": false
+}

@@ -1,0 +1,96 @@
+{
+  "generatedAt": "20261025T101816Z",
+  "context": "kind-urumi-k8s-test",
+  "helmUpgrade": "helm upgrade urumi helm/urumi --kube-context kind-urumi-k8s-test --namespace default --timeout 20m -f helm/urumi/values-kind-urumi-k8s-test.local.yaml",
+  "valuesChanged": {
+    "gateway.image.tag": "pvc-labels-20261025T080649Z -> chat-egress-20261025T100634Z",
+    "networkPolicy.gatewayEgressCIDRs": [
+      "104.18.38.236/32",
+      "172.64.149.20/32"
+    ]
+  },
+  "valuesUnchanged": [
+    "allowExternalEgress false",
+    "allowPluginEgress false",
+    "concurrency 1",
+    "chatApiSecret urumi-test-chat"
+  ],
+  "renderMatchedReviewedPreview": true,
+  "release": {
+    "revision": 8,
+    "status": "deployed"
+  },
+  "images": {
+    "urumi-gateway": "urumi-gateway:chat-egress-20261025T100634Z",
+    "urumi-store-provisioner": "urumi-gateway:chat-egress-20261025T100634Z"
+  },
+  "health": {
+    "defaultAllReady": true,
+    "defaultRestarts": 0,
+    "storeBAllReady": true,
+    "storeBRestarts": 0,
+    "baselineInitHook": "succeeded=1; WordPress already installed, no core update"
+  },
+  "pvs": [
+    "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a default/urumi-wordpress-data",
+    "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7 st-174c75b6c0ef57e5/data-store-db-0",
+    "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971 default/data-urumi-gateway-db-0",
+    "pvc-8ca68528-e380-4896-a925-335cafddda34 default/data-urumi-store-db-0",
+    "pvc-9cc41993-f39d-4f92-8204-7974b4546771 st-174c75b6c0ef57e5/wordpress-data"
+  ],
+  "livePolicies": {
+    "urumi-gateway-net": "egress ipBlock 104.18.38.236/32 and 172.64.149.20/32 on TCP 443",
+    "urumi-wordpress-init-net": "no ipBlock",
+    "urumi-woocommerce-mcp-net": "no ipBlock",
+    "urumi-store-provisioner-net": "no ipBlock; pre-existing TCP 443/6443 with no destination"
+  },
+  "chatEnv": {
+    "CHAT_API_KEY": "set",
+    "CHAT_API_URL": "set, host api.groq.com",
+    "CHAT_MODEL": "set, openai/gpt-oss-120b",
+    "valuesPrinted": false
+  },
+  "egressProbes": {
+    "gateway": {
+      "api.groq.com:443": "connect",
+      "104.18.38.236:443": "connect",
+      "172.64.149.20:443": "connect",
+      "1.1.1.1:443": "blocked"
+    },
+    "default/urumi-woocommerce-mcp": {
+      "104.18.38.236:443": "blocked",
+      "172.64.149.20:443": "blocked"
+    },
+    "default/urumi-support-mcp": {
+      "104.18.38.236:443": "blocked"
+    },
+    "st-174c75b6c0ef57e5/woo-mcp": {
+      "104.18.38.236:443": "blocked",
+      "172.64.149.20:443": "blocked"
+    },
+    "default/urumi-wordpress": {
+      "104.18.38.236:443": "blocked",
+      "172.64.149.20:443": "blocked"
+    },
+    "default/urumi-store-provisioner": {
+      "104.18.38.236:443": "connect",
+      "1.1.1.1:443": "connect"
+    },
+    "method": "kubectl exec into existing pods, 4 s TCP connect; no diagnostic pods"
+  },
+  "finding": "urumi-store-provisioner-net has a pre-existing egress rule allowing TCP 443 and 6443 to any destination (no 'to'). It predates revision 8 and lets the provisioner reach any public HTTPS host. Narrowing it to the API server (10.96.0.1/32:443 and the node 172.19.0.2/32:6443) needs a separate reviewed change.",
+  "chat": {
+    "session": "admin session renewed with provision reset-admin-password; password file removed",
+    "request": "POST /admin/chat, one user message asking for a fixed reply and no tools",
+    "status": 200,
+    "seconds": 2.3,
+    "replyMatched": true,
+    "activityCount": 0,
+    "audit": "013b6aeafe9ea69c chat success 10:17:54Z"
+  },
+  "matrixChanged": false,
+  "memory": {
+    "hostAvailableMiB": 2539,
+    "testNodeGiB": 2.908
+  }
+}

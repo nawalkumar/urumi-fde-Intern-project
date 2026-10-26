@@ -1,12 +1,17 @@
 """Store tool routing stays on the shared dispatcher and exact grants."""
 
+import httpx2
 import pytest
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, ListToolsResult, Tool
 
 from apps.gateway.app.audit import Auditor
 from apps.gateway.app.auth import Authenticator
+from apps.gateway.app.chat import ChatService
 from apps.gateway.app.config import Settings, StoreProvisionerSettings
+from apps.gateway.app.discovery import collect_authorized
 from apps.gateway.app.dispatch import ToolDispatcher
+from apps.gateway.app.main import create_app
+from apps.gateway.app.passwords import hash_password
 from apps.gateway.app.registry import Registry
 from apps.gateway.app.store import InMemoryStore
 from apps.gateway.app.stores.model import public_tool
@@ -47,7 +52,7 @@ async def test_deleting_store_is_not_called_and_another_store_cannot_be_selected
     user = await memory.create_user("ada", hash_password("password-value-ok"), "admin")
     left = await _ready_store(memory, user.user_id, "North Shop", "idem-north-1")
     right = await _ready_store(memory, user.user_id, "South Shop", "idem-south-1")
-    issued = await memory.issue()
+    issued = await memory.issue_for_user(user.user_id)
     left_tool = public_tool(left, "list_orders")
     right_tool = public_tool(right, "list_orders")
     assert left_tool != right_tool
@@ -95,3 +100,173 @@ async def test_static_woocommerce_grant_is_unchanged_by_store_routing() -> None:
     assert result.is_error is False
     assert registry.calls == ["woocommerce__list_orders"]
     assert await memory.list_permissions(issued.key_id) == ["woocommerce__list_orders"]
+
+
+class _Catalog:
+    def __init__(self, tools: list[Tool]) -> None:
+        self.tools = tools
+        self.calls: list[str] = []
+
+    async def list_tools_result(self) -> ListToolsResult:
+        return ListToolsResult(tools=self.tools)
+
+    async def call(self, name: str, arguments: dict) -> CallToolResult:
+        self.calls.append(name)
+        return CallToolResult(content=[], is_error=False)
+
+
+@pytest.mark.asyncio
+async def test_cross_owner_store_tool_is_denied_without_an_upstream_call() -> None:
+    memory = InMemoryStore()
+    owner = await memory.create_user("ada", hash_password("password-value-ok"), "admin")
+    other = await memory.create_user("bea", hash_password("password-value-ok"), "member")
+    store_id = await _ready_store(memory, owner.user_id, "North Shop", "idem-north-1")
+    tool_name = public_tool(store_id, "list_orders")
+    owner_key = await memory.issue_for_user(owner.user_id)
+    other_key = await memory.issue_for_user(other.user_id)
+    anonymous = await memory.issue()
+    assert await memory.grant(owner_key.key_id, tool_name) is True
+    assert await memory.grant(other_key.key_id, tool_name) is True
+    assert await memory.grant(anonymous.key_id, tool_name) is True
+    assert await memory.grant(other_key.key_id, "utility__convert_units") is True
+    authenticator = Authenticator(memory)
+    registry = Recording()
+    dispatcher = ToolDispatcher(registry, authenticator, Auditor(memory), memory)
+    owner_principal = await authenticator.authenticate(owner_key.raw_key)
+    allowed = await dispatcher.execute_tool(owner_principal, tool_name, {})
+    assert allowed.is_error is False
+    assert registry.calls == [tool_name]
+
+    other_principal = await authenticator.authenticate(other_key.raw_key)
+    denied = await dispatcher.execute_tool(other_principal, tool_name, {})
+    assert denied.is_error is True
+    assert denied.content[0].text == "Permission denied."
+    assert store_id not in denied.content[0].text
+    assert owner.user_id not in denied.content[0].text
+    assert registry.calls == [tool_name]
+
+    anonymous_principal = await authenticator.authenticate(anonymous.raw_key)
+    anonymous_denied = await dispatcher.execute_tool(anonymous_principal, tool_name, {})
+    assert anonymous_denied.is_error is True
+    assert anonymous_denied.content[0].text == "Permission denied."
+    assert registry.calls == [tool_name]
+
+    utility = await dispatcher.execute_tool(other_principal, "utility__convert_units", {})
+    assert utility.is_error is False
+    assert registry.calls == [tool_name, "utility__convert_units"]
+
+    catalog = _Catalog(
+        [
+            Tool(name=tool_name, description="orders", input_schema={"type": "object"}),
+            Tool(name="utility__convert_units", description="units", input_schema={"type": "object"}),
+        ]
+    )
+    other_visible, _excluded, error = await collect_authorized(catalog, authenticator, memory, other_principal)
+    assert error == ""
+    assert [item.name for item in other_visible] == ["utility__convert_units"]
+    owner_visible, _excluded, error = await collect_authorized(catalog, authenticator, memory, owner_principal)
+    assert error == ""
+    assert [item.name for item in owner_visible] == [tool_name]
+    assert catalog.calls == []
+
+    chat = ChatService(
+        dispatcher=dispatcher,
+        authenticator=authenticator,
+        auditor=Auditor(memory),
+        store=memory,
+        registry=catalog,
+        provider=object(),  # type: ignore[arg-type]
+        settings=Settings(upstreams=[]),
+    )
+    other_chat = await chat._visible_tools(other)
+    owner_chat = await chat._visible_tools(owner)
+    assert [getattr(item, "name", "") for item in other_chat] == ["utility__convert_units"]
+    assert [getattr(item, "name", "") for item in owner_chat] == [tool_name]
+    assert registry.calls == [tool_name, "utility__convert_units"]
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_grant_another_users_store_tool(launch_app) -> None:
+    memory = InMemoryStore()
+    await memory.create_user("ada", hash_password("admin-password-value"), "admin")
+    owner = await memory.create_user("bea", hash_password("member-password-value"), "member")
+    other = await memory.create_user("cam", hash_password("member-password-value"), "member")
+    store_id = await _ready_store(memory, owner.user_id, "North Shop", "idem-north-1")
+    tool_name = public_tool(store_id, "list_orders")
+    missing_tool = public_tool("0123456789abcdef", "list_orders")
+    owner_key = await memory.issue_for_user(owner.user_id)
+    other_key = await memory.issue_for_user(other.user_id)
+    app = create_app(
+        Settings(upstreams=[], stores=StoreProvisionerSettings(enabled=True)),
+        store=memory,
+        start_store_worker=False,
+        store_autostart=False,
+    )
+    base = launch_app(app)
+    with httpx2.Client(base_url=base, timeout=10, headers={"X-Urumi-Request": "1"}) as client:
+        assert client.post("/admin/login", json={"username": "ada", "password": "admin-password-value"}).status_code == 200
+        rejected = client.post(
+            f"/admin/keys/{other_key.key_id}/permissions",
+            json={"tool_name": tool_name, "user_id": owner.user_id},
+        )
+        assert rejected.status_code == 400
+        assert rejected.json() == {"error": "invalid_request", "error_description": "The request was rejected."}
+        assert store_id not in rejected.text
+        assert owner.user_id not in rejected.text
+        assert await memory.list_permissions(other_key.key_id) == []
+        unrelated = client.post(
+            f"/admin/keys/{other_key.key_id}/permissions",
+            json={"tool_name": "utility__convert_units"},
+        )
+        assert unrelated.status_code == 200
+        assert await memory.list_permissions(other_key.key_id) == ["utility__convert_units"]
+        accepted = client.post(
+            f"/admin/keys/{owner_key.key_id}/permissions",
+            json={"tool_name": tool_name},
+        )
+        assert accepted.status_code == 200
+        assert await memory.list_permissions(owner_key.key_id) == [tool_name]
+        missing = client.post(
+            f"/admin/keys/{owner_key.key_id}/permissions",
+            json={"tool_name": missing_tool},
+        )
+        assert missing.status_code == 400
+        assert await memory.list_permissions(owner_key.key_id) == [tool_name]
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_grant_a_store_tool_to_a_key_without_an_owner(launch_app) -> None:
+    memory = InMemoryStore()
+    await memory.create_user("ada", hash_password("admin-password-value"), "admin")
+    owner = await memory.create_user("bea", hash_password("member-password-value"), "member")
+    store_id = await _ready_store(memory, owner.user_id, "North Shop", "idem-north-1")
+    tool_name = public_tool(store_id, "list_orders")
+    anonymous = await memory.issue()
+    row = await memory.get(anonymous.key_id)
+    assert row is not None and row.user_id is None
+    granted: list[tuple[str, str]] = []
+
+    async def record_grant(key_id: str, name: str) -> bool:
+        granted.append((key_id, name))
+        return await InMemoryStore.grant(memory, key_id, name)
+
+    memory.grant = record_grant  # type: ignore[method-assign]
+    app = create_app(
+        Settings(upstreams=[], stores=StoreProvisionerSettings(enabled=True)),
+        store=memory,
+        start_store_worker=False,
+        store_autostart=False,
+    )
+    base = launch_app(app)
+    with httpx2.Client(base_url=base, timeout=10, headers={"X-Urumi-Request": "1"}) as client:
+        assert client.post("/admin/login", json={"username": "ada", "password": "admin-password-value"}).status_code == 200
+        rejected = client.post(
+            f"/admin/keys/{anonymous.key_id}/permissions",
+            json={"tool_name": tool_name, "user_id": owner.user_id},
+        )
+        assert rejected.status_code == 400
+        assert rejected.json() == {"error": "invalid_request", "error_description": "The request was rejected."}
+        assert store_id not in rejected.text
+        assert owner.user_id not in rejected.text
+    assert granted == []
+    assert await memory.list_permissions(anonymous.key_id) == []

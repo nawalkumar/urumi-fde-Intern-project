@@ -1,4 +1,4 @@
-"""HttpChatProvider logs a status or a failure class, never a provider body or key."""
+"""HttpChatProvider logs a status and a sanitized detail, never a raw body or key."""
 
 import logging
 
@@ -49,25 +49,113 @@ def _provider() -> HttpChatProvider:
 
 def _assert_log_is_safe(caplog: pytest.LogCaptureFixture) -> None:
     text = caplog.text
+    folded = text.casefold()
     assert _KEY not in text
     assert _BODY not in text
     assert _PAYLOAD not in text
-    assert "Authorization" not in text
+    assert "authorization" not in folded
+    assert "bearer" not in folded
 
 
 @pytest.mark.asyncio
-async def test_provider_http_error_logs_only_the_status(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+async def test_provider_http_error_logs_a_sanitized_detail(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     def post(payload: object) -> _Response:
         assert isinstance(payload, dict)
         assert _PAYLOAD in str(payload["messages"])
-        return _Response(429, {"error": _BODY})
+        return _Response(
+            429,
+            {"error": {"message": "  model \n not \t found  ", "body": _BODY}, "request": _PAYLOAD},
+        )
+
+    _install(monkeypatch, post)
+    with caplog.at_level(logging.WARNING, logger="apps.gateway.app.chat_provider"):
+        with pytest.raises(ProviderError, match="could not answer") as caught:
+            await _provider().complete(messages=[{"role": "user", "content": _PAYLOAD}], tools=[])
+    assert str(caught.value) == "The chat provider could not answer."
+    assert "status=429" in caplog.text
+    assert "detail=model not found" in caplog.text
+    _assert_log_is_safe(caplog)
+
+
+@pytest.mark.asyncio
+async def test_provider_http_error_caps_the_detail(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    def post(payload: object) -> _Response:
+        del payload
+        return _Response(400, {"error": {"message": "n" * 180, "body": _BODY}})
 
     _install(monkeypatch, post)
     with caplog.at_level(logging.WARNING, logger="apps.gateway.app.chat_provider"):
         with pytest.raises(ProviderError, match="could not answer"):
             await _provider().complete(messages=[{"role": "user", "content": _PAYLOAD}], tools=[])
-    assert "status=429" in caplog.text
+    assert "detail=" + ("n" * 160) in caplog.text
+    assert "n" * 161 not in caplog.text
     _assert_log_is_safe(caplog)
+
+
+@pytest.mark.asyncio
+async def test_provider_malformed_error_json_logs_unreadable(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    def post(payload: object) -> _Response:
+        del payload
+        return _Response(400, broken=True)
+
+    _install(monkeypatch, post)
+    with caplog.at_level(logging.WARNING, logger="apps.gateway.app.chat_provider"):
+        with pytest.raises(ProviderError, match="could not answer"):
+            await _provider().complete(messages=[{"role": "user", "content": _PAYLOAD}], tools=[])
+    assert "status=400" in caplog.text
+    assert "detail=unreadable" in caplog.text
+    _assert_log_is_safe(caplog)
+
+
+@pytest.mark.asyncio
+async def test_provider_http_error_redacts_sensitive_details(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    samples = (
+        f"rejected {_KEY} after 160",
+        ("n" * 160) + _KEY,
+        "Authorization header was rejected",
+        "Bearer token was rejected",
+    )
+    for sample in samples:
+        caplog.clear()
+
+        def post(payload: object, sample: str = sample) -> _Response:
+            del payload
+            return _Response(400, {"error": {"message": sample, "body": _BODY}})
+
+        _install(monkeypatch, post)
+        with caplog.at_level(logging.WARNING, logger="apps.gateway.app.chat_provider"):
+            with pytest.raises(ProviderError, match="could not answer"):
+                await _provider().complete(messages=[{"role": "user", "content": _PAYLOAD}], tools=[])
+        assert "status=400" in caplog.text
+        assert "detail=redacted" in caplog.text
+        assert sample not in caplog.text
+        _assert_log_is_safe(caplog)
+
+
+@pytest.mark.asyncio
+async def test_provider_http_error_redacts_credential_shapes(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    samples = (
+        "bearer token was rejected",
+        "authorization header was rejected",
+        "rejected token sk-other-value",
+    )
+    for sample in samples:
+        caplog.clear()
+
+        def post(payload: object, sample: str = sample) -> _Response:
+            del payload
+            return _Response(400, {"error": {"message": sample, "body": _BODY}})
+
+        _install(monkeypatch, post)
+        with caplog.at_level(logging.WARNING, logger="apps.gateway.app.chat_provider"):
+            with pytest.raises(ProviderError, match="could not answer") as caught:
+                await _provider().complete(messages=[{"role": "user", "content": _PAYLOAD}], tools=[])
+        assert str(caught.value) == "The chat provider could not answer."
+        assert "status=400" in caplog.text
+        assert "detail=redacted" in caplog.text
+        assert sample not in caplog.text
+        assert "sk-other-value" not in caplog.text
+        _assert_log_is_safe(caplog)
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,96 @@
+{
+  "generatedAt": "20261025T080222Z",
+  "context": "kind-urumi-k8s-test",
+  "helmRevision": 6,
+  "preflight": {
+    "branch": "submission",
+    "head": "b4b813c568ca70b45d28944a44de4e8e770f874d",
+    "gitStatusEntries": 43,
+    "baselinePodsReady": true,
+    "baselineRestarts": 0,
+    "storeAPodsReady": true,
+    "hostAvailableMiB": 2486,
+    "testNodeGiB": 2.971
+  },
+  "liveWrites": [
+    "POST /admin/keys with user_id=169d3b25942f065b (acceptance-admin) -> 201, key_id 03ab04ae83ba0191",
+    "POST /admin/keys/03ab04ae83ba0191/permissions tool_name=store_c4421147ea825bbc__list_orders -> 200"
+  ],
+  "keyValueHandling": "raw key returned only inside the gateway pod process memory, used for the MCP calls, then discarded; never printed, written to a file, or passed as an argument",
+  "keys": {
+    "03ab04ae83ba0191": {
+      "owner": "169d3b25942f065b",
+      "permissions": [
+        "store_c4421147ea825bbc__list_orders"
+      ]
+    },
+    "40ab7159b6c06f90": {
+      "owner": null,
+      "permissions": []
+    }
+  },
+  "mcp": {
+    "toolsListWithGrantedKey": [
+      "store_c4421147ea825bbc__list_orders"
+    ],
+    "listOrders": {
+      "httpStatus": 200,
+      "isError": false,
+      "auditOutcome": "success",
+      "upstream": "store_c4421147ea825bbc",
+      "durationMs": 8756,
+      "orderContentRecorded": false
+    },
+    "ungrantedStoreTool": {
+      "tool": "store_c4421147ea825bbc__get_order",
+      "isError": true,
+      "text": "Permission denied.",
+      "auditOutcome": "unauthorized"
+    },
+    "ungrantedStaticTool": {
+      "tool": "utility__convert_units",
+      "isError": true,
+      "text": "Permission denied.",
+      "auditOutcome": "unauthorized"
+    },
+    "invalidKey": {
+      "httpStatus": 401,
+      "error": "invalid_token",
+      "auditActor": "unauthenticated"
+    },
+    "ownerlessKeyEarlier": {
+      "tool": "store_c4421147ea825bbc__list_orders",
+      "auditOutcome": "unauthorized",
+      "at": "2026-10-25T07:18:55Z"
+    }
+  },
+  "auditRows": [
+    "08:01:40 169d3b25942f065b admin:issue_key success target 03ab04ae83ba0191",
+    "08:01:41 169d3b25942f065b admin:grant_permission success target '03ab04ae83ba0191 store_c4421147ea825bbc__list_orders'",
+    "08:01:50 03ab04ae83ba0191 store_c4421147ea825bbc__list_orders success upstream store_c4421147ea825bbc 8756 ms",
+    "08:01:50 03ab04ae83ba0191 store_c4421147ea825bbc__get_order unauthorized",
+    "08:01:50 03ab04ae83ba0191 utility__convert_units unauthorized",
+    "08:01:50 unauthenticated unauthorized"
+  ],
+  "notDone": [
+    "Store B",
+    "PVC changes",
+    "Helm",
+    "pod restarts",
+    "egress",
+    "chat",
+    "deletes"
+  ],
+  "matrixChanges": {
+    "MS-03f": "PARTIAL -> PROVEN \u2014 TEST CLUSTER",
+    "MS-03g": "PARTIAL -> PROVEN \u2014 TEST CLUSTER",
+    "MS-08-5": "UNTESTED -> PARTIAL (Store A grant only)",
+    "MS-08-10": "UNTESTED -> PARTIAL (attribution on a direct MCP call, not chat)"
+  },
+  "counts": {
+    "proven": 23,
+    "partial": 26,
+    "untested": 36,
+    "total": 85
+  }
+}

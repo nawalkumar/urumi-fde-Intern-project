@@ -1,0 +1,237 @@
+{
+  "generatedAt": "2026-10-25T15:15:52Z",
+  "context": "kind-urumi-k8s-test",
+  "kindCluster": "urumi-k8s-test",
+  "scope": "Test-only rollout of the gateway get_tool_input_schema fix (Helm revision 9 -> 10) and read-only correlation of post-rollout MCP checks with the audit log and upstream logs.",
+  "protectedContext": "kind-urumi-k8s-dev is the kubectl current-context on this host. It was never used. Every kubectl command passed --context kind-urumi-k8s-test, every helm command passed --kube-context kind-urumi-k8s-test, and kind load used --name urumi-k8s-test. No command, including read-only checks, ran against the dev cluster or its node.",
+  "change": {
+    "files": [
+      "apps/gateway/app/main.py: Server(..., get_tool_input_schema=_no_input_schema); _no_input_schema returns None for every name and makes no network, store, filesystem, or secret access",
+      "docs/design.md: request-lifecycle paragraph on the hook and the Mcp-Param-* trade-off",
+      "tests/test_call_upstream_contact.py: 8 regression tests (new, untracked)"
+    ],
+    "workingTree": {"branch": "submission", "head": "b4b813c568ca70b45d28944a44de4e8e770f874d", "changedEntries": 46, "gitOperations": "none"}
+  },
+  "image": {
+    "tag": "urumi-gateway:mcp-schema-hook-20261025T145951Z",
+    "dockerImageId": "sha256:6b999cd38f597294ebc6789af66a6456ffe2bac31e61c9ed16f8773bc19bc277",
+    "testNodeImageId": "sha256:dcb112695a038c101862f294d27fb5557b29af03e96c9094f9b0e1e80f8eef1b",
+    "runningPodImageRef": "docker.io/library/import-2026-10-25@sha256:3839a77bc2dc9b0c878802b206df31e324d8b7bf5fd9a1a0811c3fcc1eaba362",
+    "rootfsLayers": {"local": 7, "testNode": 7, "identical": true, "layerListSha256Prefix": "7b8c58632b036334"},
+    "labels": {"io.urumi.source.revision": "b4b813c568ca70b45d28944a44de4e8e770f874d", "io.urumi.source.dirty": "true"},
+    "installedMainPySha256Prefix": {"builtImage": "fb6f70fe10236ec3", "gatewayPod": "fb6f70fe10236ec3", "provisionerPod": "fb6f70fe10236ec3", "workingTree": "fb6f70fe10236ec3", "previousLiveImage": "87ae3d1701356d20"},
+    "provenanceFile": "docs/verification/evidence/multi-store/gateway-image-mcp-schema-hook-20261025T145951Z-provenance.json",
+    "provenanceDeviations": [
+      "Attempt 1 passed --image-name with a tag, which scripts/image_provenance.py rejects. The capture and build commands were not chained, so a build ran anyway (14:59:51-15:00:20Z) without a provenance record or source labels (labels 'unknown'). That image was not loaded or deployed.",
+      "Attempt 2 wrote the record inside the repository, which changed porcelain_sha256 and context_sha256, so complete() refused. That incomplete record (image_id null) was moved to /tmp and not kept as evidence. Its image (sha256:d027981b...) was not loaded or deployed and is no longer inspectable, so why its ID differed from the final build was not established.",
+      "Final: capture to /tmp, build with the script's --build-arg flags (all layers cached, 15:01:34-15:01:37Z), complete() succeeded against unchanged source, then the record was copied to the evidence directory."
+    ],
+    "rollbackImageOnTestNode": "urumi-gateway:chat-egress-20261025T100634Z present"
+  },
+  "commands": {
+    "build": "docker build --build-arg URUMI_SOURCE_REVISION=b4b813c568ca70b45d28944a44de4e8e770f874d --build-arg URUMI_SOURCE_DIRTY=true -f apps/gateway/Dockerfile -t urumi-gateway:mcp-schema-hook-20261025T145951Z .",
+    "provenance": [
+      ".venv/bin/python scripts/image_provenance.py capture --context . --dockerfile apps/gateway/Dockerfile --image-name urumi-gateway --output /tmp/urumi-rollout/provenance.json",
+      ".venv/bin/python scripts/image_provenance.py complete --record /tmp/urumi-rollout/provenance.json --image-id sha256:6b999cd38f597294ebc6789af66a6456ffe2bac31e61c9ed16f8773bc19bc277"
+    ],
+    "load": "kind load docker-image urumi-gateway:mcp-schema-hook-20261025T145951Z --name urumi-k8s-test",
+    "valuesEdit": "install -m 600 helm/urumi/values-kind-urumi-k8s-test.local.yaml /tmp/urumi-rollout/values-kind-urumi-k8s-test.rev9.yaml; sed -i 's/^    tag: chat-egress-20261025T100634Z$/    tag: mcp-schema-hook-20261025T145951Z/' helm/urumi/values-kind-urumi-k8s-test.local.yaml",
+    "render": "helm template urumi helm/urumi --kube-context kind-urumi-k8s-test --namespace default -f helm/urumi/values-kind-urumi-k8s-test.local.yaml [--no-hooks], compared with helm get manifest/hooks urumi by resource and field path; Secret paths were not printed",
+    "dryRun": "helm upgrade urumi helm/urumi --kube-context kind-urumi-k8s-test --namespace default --timeout 20m -f helm/urumi/values-kind-urumi-k8s-test.local.yaml --dry-run=server (output discarded)",
+    "upgrade": "helm upgrade urumi helm/urumi --kube-context kind-urumi-k8s-test --namespace default --timeout 20m -f helm/urumi/values-kind-urumi-k8s-test.local.yaml",
+    "waits": [
+      "kubectl --context kind-urumi-k8s-test -n default rollout status deploy/urumi-gateway --timeout=5m",
+      "kubectl --context kind-urumi-k8s-test -n default rollout status deploy/urumi-store-provisioner --timeout=5m",
+      "kubectl --context kind-urumi-k8s-test -n default wait --for=condition=complete job/urumi-wordpress-init --timeout=10m"
+    ],
+    "portForward": "kubectl --context kind-urumi-k8s-test -n default port-forward --address 127.0.0.1 svc/urumi-gateway 18082:8000 (restarted by the agent in the background after the old forward exited with 'lost connection to pod'; dashboard forward on 18081 untouched)",
+    "runner": "cd /home/naval/project/urumi-project && .venv/bin/python /tmp/urumi_postfix_test.py (run by the owner in terminal shell pid 374685; reads the key from the environment and never prints it)"
+  },
+  "gates": {
+    "preflight": {
+      "atUtc": "2026-10-25T14:58:00Z",
+      "release": "revision 9 deployed",
+      "images": "gateway and provisioner urumi-gateway:chat-egress-20261025T100634Z",
+      "valuesFile": "tag line count 1; render with unmodified values equals revision 9 except two trailing blank lines in the stored manifest; hook Job identical",
+      "stores": "174c75b6c0ef57e5 ready attempt 0; 5bc7dc01da3ccf38 ready attempt 0; 0 provisioning or deleting; both store upstreams enabled",
+      "pods": "all default, Store B, Store C pods Ready, 0 restarts; init Jobs Succeeded",
+      "pvs": "7 Bound",
+      "auditMax": 53,
+      "tests": ".venv/bin/python -m pytest -q tests/test_call_upstream_contact.py tests/test_gateway_auth.py tests/test_store_routing.py tests/test_discovery_policy.py tests/test_upstream_controls.py -> 40 passed"
+    },
+    "valuesChange": {"backup": "/tmp/urumi-rollout/values-kind-urumi-k8s-test.rev9.yaml (mode 600, sha256 prefix 66e0c1a4de98208f, same as original)", "changedLines": "line 14 only: tag chat-egress-20261025T100634Z -> mcp-schema-hook-20261025T145951Z", "trackedValuesChanged": false},
+    "render": {"resources": "36 before and after, none added or removed", "fieldChanges": ["Deployment default/urumi-gateway .spec.template.spec.containers[0].image", "Deployment default/urumi-store-provisioner .spec.template.spec.containers[0].image"], "secretChanges": [], "policyChanges": [], "hooksIdentical": true},
+    "dryRun": {"atUtc": "2026-10-25T15:03:14Z", "result": "exit 0, revision 10 'Dry run complete', no errors or warnings; live release stayed at revision 9"},
+    "upgrade": {"startUtc": "2026-10-25T15:03:33.961Z", "endUtc": "2026-10-25T15:04:09.989Z", "result": "exit 0, revision 10 deployed", "rolloutsComplete": true, "initJobComplete": true}
+  },
+  "before": {
+    "release": {"revision": 9, "status": "deployed"},
+    "generations": {"urumi-gateway": 6, "urumi-store-provisioner": 5, "urumi-dashboard": 1, "urumi-support-mcp": 1, "urumi-utility-mcp": 1, "urumi-woocommerce-mcp": 1, "urumi-wordpress": 2, "urumi-gateway-db": 1, "urumi-store-db": 1, "st-174c75b6c0ef57e5/woo-mcp": 20, "st-174c75b6c0ef57e5/wordpress": 20, "st-5bc7dc01da3ccf38/woo-mcp": 35, "st-5bc7dc01da3ccf38/wordpress": 35},
+    "pods": {"gateway": "urumi-gateway-57c67d754c-6bt82", "provisioner": "urumi-store-provisioner-6b5b55dbfc-s856s", "restarts": 0}
+  },
+  "after": {
+    "checkedAtUtc": "2026-10-25T15:15:30Z",
+    "release": {"revision": 10, "status": "deployed", "previous": "revision 9 superseded"},
+    "images": {"urumi-gateway": "urumi-gateway:mcp-schema-hook-20261025T145951Z", "urumi-store-provisioner": "urumi-gateway:mcp-schema-hook-20261025T145951Z", "others": "unchanged"},
+    "generations": {"urumi-gateway": 7, "urumi-store-provisioner": 6, "others": "unchanged, including Store B 20 and Store C 35"},
+    "pods": {"gateway": "urumi-gateway-5f87bb6566-b2h5f (IP 192.168.184.173)", "provisioner": "urumi-store-provisioner-74f476996-sqmxp", "newHookPod": "urumi-wordpress-init-zsrr7 Succeeded", "storePodNames": "unchanged", "allReady": true, "restarts": 0},
+    "stores": "both ready attempt 0; 0 provisioning or deleting",
+    "pvs": [
+      "pvc-344d38d8-ad9f-4f06-b54a-ad2884c2432a default/urumi-wordpress-data Bound",
+      "pvc-4ae7dc69-2ae0-45cd-93a9-70b2029fccb7 st-174c75b6c0ef57e5/data-store-db-0 Bound",
+      "pvc-5c782e72-9c34-43e7-9d47-e4dd04c4d971 default/data-urumi-gateway-db-0 Bound",
+      "pvc-5d211c94-7e52-4752-a983-c51d2e64b5ef st-5bc7dc01da3ccf38/wordpress-data Bound",
+      "pvc-8ca68528-e380-4896-a925-335cafddda34 default/data-urumi-store-db-0 Bound",
+      "pvc-9cc41993-f39d-4f92-8204-7974b4546771 st-174c75b6c0ef57e5/wordpress-data Bound",
+      "pvc-da403201-662a-4320-a0d8-6ab86528c40e st-5bc7dc01da3ccf38/data-store-db-0 Bound"
+    ],
+    "health": "GET /health via 127.0.0.1:18082 -> 200",
+    "logsSinceRollout": {"urumi-store-provisioner": "0 lines", "urumi-gateway": "85 lines, 0 traceback, 0 ERROR/CRITICAL, 0 WARNING"}
+  },
+  "memory": {
+    "sampler": "/tmp/urumi-rollout/memory.log, every ~2-3 s from 14:59:32Z to 15:15:30Z, 290 samples",
+    "hostAvailableMinMiB": 1987,
+    "testNodeMaxGiB": 3.276,
+    "gates": {"preBuildMiB": 2089, "preLoadMiB": 2114, "preDeployMiB": 2118, "afterRolloutMiB": 2220, "atCorrelationMiB": 2211},
+    "thresholdsCrossed": false
+  },
+  "key": {"key_id": "d81bf7a2acd3750f", "user_id": "169d3b25942f065b", "live": true, "grants": ["store_174c75b6c0ef57e5__list_orders", "store_5bc7dc01da3ccf38__list_orders"], "rawKeyRecorded": false},
+  "runner": {
+    "start": "2026-10-25T15:08:41.956270Z",
+    "end": "2026-10-25T15:09:27.620102Z",
+    "sessions": [
+      {"mode": "auto", "opened": "2026-10-25T15:08:42.076692Z", "negotiatedProtocol": "2026-07-28", "closing": "2026-10-25T15:09:15.508082Z"},
+      {"mode": "legacy", "opened": "2026-10-25T15:09:15.556684Z", "negotiatedProtocol": "2025-11-25", "closing": "2026-10-25T15:09:27.613957Z"}
+    ],
+    "clockAlignment": "Client times come from the WSL host; container log times come from the kind node container on the same host kernel. Each gateway access-log line falls inside its client window (W1 54.629 in 54.576-54.636; W2 00.683 in 00.644-00.688; W4 21.606 in 21.564-21.611), and windows are about 6 s apart, so attribution is unambiguous."
+  },
+  "windows": [
+    {
+      "window": "W0",
+      "protocol": "2026-07-28",
+      "call": "tools/list",
+      "client": {"start": "2026-10-25T15:08:48.079059Z", "end": "2026-10-25T15:08:48.571667Z", "result": "tools=store_174c75b6c0ef57e5__list_orders,store_5bc7dc01da3ccf38__list_orders"},
+      "auditRows": [],
+      "auditNote": "tools/list is not audited.",
+      "gatewayAccessLog": ["15:08:48.565623Z POST /mcp 200"],
+      "upstreamRequests": {
+        "urumi-woocommerce-mcp": ["15:08:48.200378Z POST /mcp 200", "15:08:48.235832Z POST /mcp 200"],
+        "urumi-support-mcp": ["15:08:48.317528Z POST /mcp 200", "15:08:48.337704Z POST /mcp 200"],
+        "urumi-utility-mcp": ["15:08:48.396782Z POST /mcp 200", "15:08:48.413633Z POST /mcp 200"],
+        "st-174c75b6c0ef57e5/woo-mcp": ["15:08:48.457547Z POST /mcp 200", "15:08:48.475600Z POST /mcp 200"],
+        "st-5bc7dc01da3ccf38/woo-mcp": ["15:08:48.526437Z POST /mcp 200", "15:08:48.550894Z POST /mcp 200"]
+      },
+      "storeBWordPress": "no request",
+      "classification": "Discovery traffic, expected by design: the gateway's tools/list refreshes every enabled upstream sequentially (2 POSTs each, 10 in total) and returns only the two granted tools. This is not an unauthorized-call leak.",
+      "jsonRpcMethods": "Not logged. Inferred as server/discover then tools/list per upstream from the gateway's SDK Client(mode='auto') and the pre-fix unit-test MethodLog output ['server/discover', 'tools/list']."
+    },
+    {
+      "window": "W1",
+      "protocol": "2026-07-28",
+      "call": "tools/call store_174c75b6c0ef57e5__get_order {\"order_id\": 10}",
+      "client": {"start": "2026-10-25T15:08:54.575867Z", "end": "2026-10-25T15:08:54.636296Z", "is_error": true, "text": "Permission denied."},
+      "auditRows": [{"id": 54, "occurred_at": "2026-10-25T15:08:54.613487Z", "actor": "d81bf7a2acd3750f", "user_id": "169d3b25942f065b", "tool_name": "store_174c75b6c0ef57e5__get_order", "outcome": "unauthorized", "upstream_id": "", "duration_ms": null}],
+      "gatewayAccessLog": ["15:08:54.629364Z POST /mcp 200"],
+      "upstreamRequests": {"urumi-woocommerce-mcp": [], "urumi-support-mcp": [], "urumi-utility-mcp": [], "st-174c75b6c0ef57e5/woo-mcp": [], "st-5bc7dc01da3ccf38/woo-mcp": []},
+      "storeBWordPress": "no request",
+      "result": "PASS: denied, audited unauthorized, zero upstream requests. Before the fix (13:39Z) the same call caused a POST pair on every upstream."
+    },
+    {
+      "window": "W2",
+      "protocol": "2026-07-28",
+      "call": "tools/call utility__convert_units {\"value\": 1, \"from_unit\": \"km\", \"to_unit\": \"m\"}",
+      "client": {"start": "2026-10-25T15:09:00.643706Z", "end": "2026-10-25T15:09:00.687631Z", "is_error": true, "text": "Permission denied."},
+      "auditRows": [{"id": 55, "occurred_at": "2026-10-25T15:09:00.672657Z", "actor": "d81bf7a2acd3750f", "user_id": "169d3b25942f065b", "tool_name": "utility__convert_units", "outcome": "unauthorized", "upstream_id": "", "duration_ms": null}],
+      "gatewayAccessLog": ["15:09:00.683083Z POST /mcp 200"],
+      "upstreamRequests": {"urumi-woocommerce-mcp": [], "urumi-support-mcp": [], "urumi-utility-mcp": [], "st-174c75b6c0ef57e5/woo-mcp": [], "st-5bc7dc01da3ccf38/woo-mcp": []},
+      "storeBWordPress": "no request",
+      "result": "PASS: denied, audited unauthorized, zero upstream requests, including none to urumi-utility-mcp."
+    },
+    {
+      "window": "W3",
+      "protocol": "2026-07-28",
+      "call": "tools/call store_174c75b6c0ef57e5__list_orders {\"after\": \"2026-10-25T00:00:00+00:00\", \"before\": \"2026-10-26T00:00:00+00:00\"}",
+      "client": {"start": "2026-10-25T15:09:06.694041Z", "end": "2026-10-25T15:09:09.499897Z", "is_error": false, "text": "id=10 status=pending total=11.00 currency=USD created=2026-10-25T11:49:11"},
+      "auditRows": [{"id": 56, "occurred_at": "2026-10-25T15:09:09.367391Z", "actor": "d81bf7a2acd3750f", "user_id": "169d3b25942f065b", "tool_name": "store_174c75b6c0ef57e5__list_orders", "outcome": "success", "upstream_id": "store_174c75b6c0ef57e5", "duration_ms": 2645}],
+      "gatewayAccessLog": ["15:09:09.376498Z POST /mcp 200"],
+      "upstreamRequests": {
+        "st-174c75b6c0ef57e5/woo-mcp": ["15:09:06.750909Z POST /mcp 200", "15:09:06.764744Z POST /mcp 200", "15:09:09.158530Z outbound 'HTTP Request: GET http://wordpress/wp-json/wc/v3/orders?<query masked>' 200", "15:09:09.170436Z POST /mcp 200"],
+        "st-5bc7dc01da3ccf38/woo-mcp": [],
+        "urumi-utility-mcp": [],
+        "urumi-support-mcp": [],
+        "urumi-woocommerce-mcp": []
+      },
+      "storeBWordPress": ["logged 15:09:09.155799Z, request time [15:09:07 +0000]: GET /wp-json/wc/v3/orders?<query masked> 200 2645 bytes from 192.168.184.154 (Store B woo-mcp) python-httpx2/2.13.1"],
+      "result": "PASS: authorized call executed only on the owning upstream (3 POSTs plus one WooCommerce REST GET); no other upstream contacted; no pre-dispatch fan-out.",
+      "jsonRpcMethods": "Not logged. Inferred as server/discover, tools/list, tools/call from Registry.call and the unit tests."
+    },
+    {
+      "window": "W4",
+      "protocol": "2025-11-25 (legacy handshake)",
+      "call": "tools/call store_174c75b6c0ef57e5__get_order {\"order_id\": 10}",
+      "client": {"start": "2026-10-25T15:09:21.564151Z", "end": "2026-10-25T15:09:21.610522Z", "is_error": true, "text": "Permission denied."},
+      "auditRows": [{"id": 57, "occurred_at": "2026-10-25T15:09:21.593942Z", "actor": "d81bf7a2acd3750f", "user_id": "169d3b25942f065b", "tool_name": "store_174c75b6c0ef57e5__get_order", "outcome": "unauthorized", "upstream_id": "", "duration_ms": null}],
+      "gatewayAccessLog": ["15:09:21.605578Z POST /mcp 200"],
+      "upstreamRequests": {"urumi-woocommerce-mcp": [], "urumi-support-mcp": [], "urumi-utility-mcp": [], "st-174c75b6c0ef57e5/woo-mcp": [], "st-5bc7dc01da3ccf38/woo-mcp": []},
+      "storeBWordPress": "no request",
+      "result": "PASS: denied, audited unauthorized, zero upstream requests on the legacy path."
+    }
+  ],
+  "otherRunTraffic": {
+    "gateway": [
+      "15:08:42.069812Z POST /mcp 200: modern session open (no upstream request)",
+      "15:09:15.551218Z POST /mcp 200 and 15:09:15.571185Z POST /mcp 202: legacy session open; the 202 is the client notification, consistent with an initialize handshake"
+    ],
+    "upstreamOutsideWindows": "None. Across 15:08:30Z-15:09:45Z, every non-probe line in the five upstreams and Store B WordPress falls in W0 or W3.",
+    "gatewayLinesInRunWindow": 8,
+    "auditRowsCreated": "54-57 only"
+  },
+  "logSources": {
+    "method": "kubectl --context kind-urumi-k8s-test -n <ns> logs <deploy> --all-containers --timestamps --since-time=2026-10-25T15:00:00Z, filtered to 15:08:30Z-15:09:45Z; health and kube-probe lines and WordPress blank.gif probe lines excluded; credential words filtered; query strings masked",
+    "inspected": {
+      "default/urumi-gateway": "available; earliest line 15:03:51Z",
+      "st-174c75b6c0ef57e5/woo-mcp": "available; earliest line 15:00:04Z",
+      "st-5bc7dc01da3ccf38/woo-mcp": "available; earliest line 15:00:01Z",
+      "default/urumi-utility-mcp": "available; earliest line 15:00:05Z",
+      "default/urumi-support-mcp": "available; earliest line 15:00:05Z",
+      "default/urumi-woocommerce-mcp": "available; earliest line 15:00:05Z",
+      "st-174c75b6c0ef57e5/wordpress": "available; earliest line 15:00:07Z"
+    },
+    "unavailable": []
+  },
+  "correctionsToEarlierEvidence": {
+    "note": "The earlier files are not modified. These corrections supersede the quoted statements.",
+    "items": [
+      {"file": "negative-permission-tests-20261025T134737Z.json", "field": "noUpstreamExecution.whyUpstreamsWereContacted", "said": "...refreshes every enabled upstream with initialize plus tools/list. That pair is two POSTs per upstream.", "correct": "...refreshes every enabled upstream with server/discover plus tools/list (the gateway's SDK Client defaults to mode='auto'). The count of two POSTs per upstream stands. Source: mcp/client/client.py mode default and mcp/client/_probe.py negotiate_auto; pre-fix unit-test MethodLog recorded ['server/discover', 'tools/list'] per upstream."},
+      {"file": "negative-permission-tests-20261025T134737Z.json", "field": "noUpstreamExecution.utilityLimitation", "said": "registry.call needs initialize, tools/list, and tools/call", "correct": "registry.call sends server/discover, tools/list, and tools/call (three POSTs). W3 above shows exactly three POSTs on Store B woo-mcp."},
+      {"file": "negative-permission-tests-20261025T134737Z.json", "field": "otherGatewayTraffic[0]", "said": "the runner's initialize and tools/list", "correct": "the runner's server/discover and tools/list (modern session; no 202 notification was logged)."},
+      {"file": "negative-permission-tests-20261025T134737Z.json", "field": "limitations[2]", "said": "Setting get_tool_input_schema on the gateway server would avoid it; no change was made.", "correct": "Fixed by get_tool_input_schema=_no_input_schema, deployed as Helm revision 10 on kind-urumi-k8s-test. W1, W2, and W4 in this file show zero upstream requests for denied calls."},
+      {"file": "negative-permission-tests-20261025T134737Z.json", "field": "noUpstreamExecution.upstreamTrafficObserved", "said": "two POST /mcp requests to Store B woo-mcp and two to utility-mcp in each of three windows", "correct": "The counts were accurate for those two upstreams, but Store C woo-mcp, support MCP, and baseline WooCommerce MCP were not inspected and the JSON-RPC methods were not logged. Per the code, all enabled upstreams were contacted; this file inspected all five."}
+    ],
+    "unchangedStatement": "cursor-mcp-client-verification-20261025T133049Z.json describes Cursor's 13:18Z 'handshake' (POST 200, POST 202, GET 200). That is correct: Cursor used the legacy initialize handshake."
+  },
+  "rollback": {
+    "needed": false,
+    "available": "helm rollback urumi 9 --kube-context kind-urumi-k8s-test --namespace default --timeout 20m; restore /tmp/urumi-rollout/values-kind-urumi-k8s-test.rev9.yaml; old image chat-egress-20261025T100634Z is on the test node",
+    "newImageRemoved": false
+  },
+  "limitations": [
+    "Upstream and gateway access logs record HTTP method, path, status, and time, not JSON-RPC methods or request IDs. No correlation ID is logged for MCP requests. Method names above are inferred from source and unit tests.",
+    "WordPress access-log request time has one-second precision; its container log timestamp (15:09:09.156Z) is the completion time.",
+    "Authorized tools/list still fans out to all enabled upstreams by design. The SDK client also lists tools after a successful call when the tool is not cached; the runner listed first, so W3 shows no such listing.",
+    "Gateway-side Mcp-Param-* header validation is intentionally disabled (documented trade-off; covered by tests/test_call_upstream_contact.py).",
+    "This rollout does not by itself complete any acceptance subcriterion beyond the least-privilege and audit checks it exercises."
+  ],
+  "localArtifacts": {
+    "note": "Not evidence; working files outside the repository.",
+    "paths": ["/tmp/urumi-rollout/ (mode 700: values backup, render files, logs, memory.log)", "/tmp/urumi_postfix_test.py", "/tmp/urumi_negative_test.py", "/tmp/write_urumi_mcp.py"],
+    "backgroundProcesses": ["gateway port-forward pid 1256927 (test context)", "memory sampler pid in /tmp/urumi-rollout/sampler.pid"]
+  },
+  "mutations": {
+    "cluster": "Helm upgrade revision 9 -> 10 on kind-urumi-k8s-test only (gateway and provisioner image). No store, PVC, PV, database, order, namespace, Secret, NetworkPolicy, key, or grant was changed.",
+    "auditRowsCreated": "54-57 by the gateway as the result of the runner's calls",
+    "files": ["helm/urumi/values-kind-urumi-k8s-test.local.yaml (git-ignored, gateway tag line only)", "docs/verification/evidence/multi-store/gateway-image-mcp-schema-hook-20261025T145951Z-provenance.json (new)", "this file (new)"],
+    "git": "nothing staged, committed, pushed, reset, cleaned, stashed, or discarded"
+  },
+  "secretsPrinted": false
+}

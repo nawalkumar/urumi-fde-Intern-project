@@ -1,0 +1,45 @@
+{
+  "generatedAt": "20261025T053232Z",
+  "context": "kind-urumi-k8s-test",
+  "release": "urumi",
+  "revision": 2,
+  "provisionerEnabled": false,
+  "storesCreated": false,
+  "helmUpgradeExecuted": false,
+  "probe": {
+    "file": "apps/gateway/app/stores/manifests.py",
+    "function": "_wordpress_deployment",
+    "readiness": "/wp-includes/images/blank.gif",
+    "liveness": "/wp-includes/images/blank.gif",
+    "port": 80,
+    "baselineContainerStatus": "HTTP/1.1 200 OK",
+    "dependsOnIngressOrDns": false
+  },
+  "tests": {
+    "command": "pytest tests/test_store_manifests.py tests/test_stores.py tests/test_store_kube.py tests/test_store_routing.py -q --tb=line",
+    "passed": 47,
+    "failed": 0,
+    "elapsedSeconds": 15.31
+  },
+  "render": {
+    "bothFlagsExit": 0,
+    "enabledWithoutAdmitExit": 1,
+    "admitWithoutEnabledExit": 1,
+    "policy": "urumi-store-provisioner-scope",
+    "failurePolicy": "Fail",
+    "validationActions": [
+      "Deny"
+    ],
+    "gatewayLabelWhenEnabled": "urumi.dev/gateway=allowed",
+    "pluginEgress": false,
+    "storageClass": "standard",
+    "concurrencyRendered": 2
+  },
+  "memory": {
+    "availableMiB": 2516,
+    "testNodeGiB": 2.69,
+    "devNodeGiB": 1.81,
+    "stopIfAvailableBelowMiB": 1200
+  },
+  "imageGap": "urumi-gateway:disposable-manual-20261024 does not contain this probe change. The provisioner container uses that gateway image."
+}
